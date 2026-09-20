@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "Cupboard Notes",
+    "slug": "cupboard-notes",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "cupboardnotes",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.cupboardnotes.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Take photos of dishes for your Cupboard Notes recipes.",
+        "NSPhotoLibraryUsageDescription": "Attach photos from your library to Cupboard Notes recipes."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FFF7ED",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["CAMERA", "READ_MEDIA_IMAGES"],
+      "package": "com.cupboardnotes.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-secure-store",
+      "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Attach photos from your library to Cupboard Notes recipes.",
+          "cameraPermission": "Take photos of dishes for your Cupboard Notes recipes."
+        }
+      ],
+      "expo-status-bar"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
