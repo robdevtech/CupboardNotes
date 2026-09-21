@@ -39,17 +39,17 @@ export default function SettingsScreen() {
       return;
     }
     try {
-      await adapter.connect();
+      const session = await adapter.connect();
       setConnected((c) => ({ ...c, [id]: true }));
       if (!enabledProviders.includes(id)) toggleProvider(id);
       Alert.alert(
-        'Connected (stub)',
-        `${adapter.displayName}: Milestone 1 uses a stub session. Real OAuth lands in Milestone 2.\n\n${adapter.authNotes}`
+        'Connected',
+        `${adapter.displayName} connected successfully!${session.accountLabel ? `\n\nAccount: ${session.accountLabel}` : ''}`
       );
     } catch (e) {
       Alert.alert(
         adapter.displayName,
-        `${e instanceof Error ? e.message : 'Failed'}\n\n${adapter.authNotes}`
+        `${e instanceof Error ? e.message : 'Connection failed'}\n\n${adapter.authNotes}`
       );
     }
   };
@@ -99,7 +99,7 @@ export default function SettingsScreen() {
                   {!a.available
                     ? 'Unavailable on this platform'
                     : isOn
-                      ? 'Stub-connected'
+                      ? 'Connected'
                       : 'Not connected'}
                 </Text>
               </View>

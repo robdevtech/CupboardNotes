@@ -70,7 +70,8 @@ Then open in Expo Go (phone/tablet), iOS Simulator, Android emulator, or `w` for
 
 ### Stubbed / next milestones
 
-- [ ] Live OAuth (PKCE) for Google Drive, Dropbox, OneDrive, Box via `expo-auth-session`
+- [x] **Dropbox OAuth + sync (Milestone 2 — first live provider)**
+- [ ] Live OAuth (PKCE) for Google Drive, OneDrive, Box via `expo-auth-session`
 - [ ] Real iCloud ubiquity container / CloudKit in a custom dev client
 - [ ] Persist enabled-provider prefs; bidirectional cloud sync of `recipe.json` + photo binaries under `/Cupboard Notes/{recipeId}/`
 - [ ] Persist scale-mode overrides more richly; unit convert UI
@@ -84,11 +85,119 @@ Then open in Expo Go (phone/tablet), iOS Simulator, Android emulator, or `w` for
 |----------|---------------|----------------|
 | Google Drive | OAuth 2.0 PKCE | `drive.file`; folder `/Cupboard Notes` |
 | iCloud | Apple ubiquity / CloudKit | iOS only; no classic OAuth client |
-| Dropbox | OAuth 2.0 PKCE | app-folder; `files.content.read/write` |
+| **Dropbox** | **OAuth 2.0 PKCE** | **✅ LIVE: Full Dropbox, `/Cupboard Notes` folder** |
 | OneDrive | Azure AD v2 / Graph | `Files.ReadWrite`, `offline_access` |
 | Box | OAuth 2.0 | `root_readwrite` (narrow later) |
 
 Tokens: `expo-secure-store` only. Never a central Cupboard Notes server.
+
+## Dropbox Setup (First Live Provider)
+
+Cupboard Notes now supports **real Dropbox cloud storage** with OAuth 2.0 PKCE authentication. Follow these steps to enable Dropbox sync:
+
+### 1. Create a Dropbox App
+
+1. Go to the [Dropbox App Console](https://www.dropbox.com/developers/apps)
+2. Click **Create app**
+3. Choose settings:
+   - **API:** Scoped access
+   - **Access type:** Full Dropbox (the app will create `/Cupboard Notes` folder)
+   - **Name:** Choose a unique name (e.g., `cupboard-notes-dev-yourname`)
+4. Click **Create app**
+
+### 2. Configure App Permissions
+
+In the **Permissions** tab of your Dropbox app:
+
+1. Enable these scopes:
+   - `files.content.read`
+   - `files.content.write`
+   - `files.metadata.read`
+2. Click **Submit** at the bottom
+
+### 3. Configure OAuth Redirect URIs
+
+In the **Settings** tab:
+
+1. Scroll to **OAuth 2** section → **Redirect URIs**
+2. Add these URIs (one per line):
+   ```
+   cupboardnotes://auth
+   https://auth.expo.io/@your-expo-username/cupboard-notes
+   ```
+   Replace `your-expo-username` with your actual Expo username if publishing to Expo Go
+3. Click **Add**
+
+### 4. Get Your App Key
+
+In the **Settings** tab:
+
+1. Find the **App key** (looks like `abc123xyz...`)
+2. Copy this value
+
+### 5. Configure the App
+
+Add your Dropbox app key to `app.json`:
+
+```json
+{
+  "expo": {
+    "extra": {
+      "DROPBOX_APP_KEY": "your-app-key-here"
+    }
+  }
+}
+```
+
+Or set it as an environment variable:
+
+```bash
+export EXPO_PUBLIC_DROPBOX_APP_KEY=your-app-key-here
+```
+
+### 6. Test in Expo Go
+
+1. Restart the Expo dev server:
+   ```bash
+   npx expo start
+   ```
+2. Open the app in Expo Go
+3. Go to **Settings**
+4. Find **Dropbox** and tap **Connect**
+5. Complete OAuth in the browser
+6. You should see "Connected" with your account name
+
+### What Works
+
+- ✅ OAuth 2.0 PKCE authentication (no app secret needed)
+- ✅ Automatic token refresh with offline access
+- ✅ Create `/Cupboard Notes` folder automatically
+- ✅ Upload recipe JSON + photos with `syncRecipeBundle`
+- ✅ List, read, write, delete files
+- ✅ Secure token storage in device keychain
+- ✅ Works in Expo Go and standalone builds
+
+### Notes
+
+- **App key is public:** PKCE flow doesn't require an app secret, only the app key
+- **Redirect URI:** For Expo Go, use `cupboardnotes://auth`. For standalone builds, configure your custom scheme
+- **Permissions:** Full Dropbox access allows syncing to a dedicated `/Cupboard Notes` folder. App folder access would restrict to `/Apps/YourAppName`
+- **Token storage:** Refresh tokens are stored securely in device keychain via `expo-secure-store`
+
+### Troubleshooting
+
+**"DROPBOX_APP_KEY not configured" error:**
+- Make sure you've added the app key to `app.json` under `expo.extra.DROPBOX_APP_KEY`
+- Or set `EXPO_PUBLIC_DROPBOX_APP_KEY` environment variable
+- Restart the Expo dev server after changes
+
+**OAuth redirect fails:**
+- Verify redirect URI is exactly `cupboardnotes://auth` in Dropbox app settings
+- Check that `scheme: "cupboardnotes"` is set in `app.json`
+
+**"Not authenticated" errors:**
+- Disconnect and reconnect in Settings
+- Check that required scopes are enabled in Dropbox app Permissions tab
 
 ## License / attribution
 
