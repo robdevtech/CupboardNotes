@@ -8,8 +8,11 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as Linking from 'expo-linking';
+import Constants from 'expo-constants';
 import { importRecipeFromUrl } from '../src/parse/htmlFetch';
 import { parseIngredientLine } from '../src/parse/ingredientParse';
 import { newId } from '../src/domain/ids';
@@ -17,6 +20,42 @@ import { photosFromImportUrls } from '../src/storage/photos';
 import * as repo from '../src/storage/recipeRepo';
 import { useRecipeStore } from '../src/store/recipeStore';
 import { useTheme, space, type ThemeColors } from '../src/ui/theme';
+
+function buildGitHubIssueUrl(failedUrl: string, errorMessage: string): string {
+  const appVersion = Constants.expoConfig?.version ?? '1.0.0';
+  const platform = Platform.OS;
+  
+  const title = `Import failed: ${failedUrl.substring(0, 60)}${failedUrl.length > 60 ? '...' : ''}`;
+  const body = `## Import Failure Report
+
+**This issue was automatically generated from a failed recipe import.**
+
+### Failed URL
+\`\`\`
+${failedUrl}
+\`\`\`
+
+### Error Message
+\`\`\`
+${errorMessage}
+\`\`\`
+
+### Environment
+- **App Version**: ${appVersion}
+- **Platform**: ${platform}
+- **Reported via**: Import screen failure
+
+### Additional Context
+Please add any additional details about this recipe URL or the failure below.
+`;
+
+  const params = new URLSearchParams({
+    title,
+    body,
+  });
+
+  return `https://github.com/robdevtech/CupboardNotes/issues/new?${params.toString()}`;
+}
 
 export default function ImportScreen() {
   const router = useRouter();
@@ -51,6 +90,15 @@ export default function ImportScreen() {
       const msg = e instanceof Error ? e.message : 'Import failed';
       Alert.alert('Import failed', `${msg}\n\nYou can paste the recipe manually instead.`, [
         { text: 'Paste manually', onPress: () => setPasteMode(true) },
+        {
+          text: 'Report on GitHub',
+          onPress: () => {
+            const issueUrl = buildGitHubIssueUrl(url.trim(), msg);
+            Linking.openURL(issueUrl).catch((err) => {
+              Alert.alert('Could not open GitHub', err.message);
+            });
+          },
+        },
         { text: 'OK' },
       ]);
     } finally {
