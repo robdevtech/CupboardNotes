@@ -11,6 +11,7 @@ export default function SettingsScreen() {
   const adapters = listAdapters();
   const { enabledProviders, toggleProvider, themePreference, setThemePreference } = useSettingsStore();
   const [connected, setConnected] = useState<Record<string, boolean>>({});
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -39,17 +40,22 @@ export default function SettingsScreen() {
       return;
     }
     try {
-      await adapter.connect();
+      const session = await adapter.connect();
       setConnected((c) => ({ ...c, [id]: true }));
       if (!enabledProviders.includes(id)) toggleProvider(id);
       Alert.alert(
-        'Connected (stub)',
-        `${adapter.displayName}: Milestone 1 uses a stub session. Real OAuth lands in Milestone 2.\n\n${adapter.authNotes}`
+        'Connected',
+        `${adapter.displayName} connected successfully!${session.accountLabel ? `\n\nAccount: ${session.accountLabel}` : ''}`
       );
     } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : 'Connection failed';
+      const isDeveloperError = errorMessage.includes('developer setup') || errorMessage.includes('not configured');
+      
       Alert.alert(
         adapter.displayName,
-        `${e instanceof Error ? e.message : 'Failed'}\n\n${adapter.authNotes}`
+        isDeveloperError 
+          ? errorMessage
+          : `Failed to connect to ${adapter.displayName}. Please try again.\n\n${errorMessage}`
       );
     }
   };
@@ -61,13 +67,100 @@ export default function SettingsScreen() {
     setConnected((c) => ({ ...c, [id]: false }));
   };
 
+  const onSyncToCloud = async () => {
+    // Check if any provider is connected and supports sync
+    const hasConnectedSyncProvider = adapters.some(
+      (a) => connected[a.id] && a.syncRecipeBundle
+    );
+
+    if (!hasConnectedSyncProvider) {
+      Alert.alert(
+        'No cloud storage connected',
+        'Connect at least one cloud provider (like Dropbox) to sync your recipes.'
+      );
+      return;
+    }
+
+    setSyncing(true);
+
+    try {
+      const { listRecipes } = await import('../src/storage/recipeRepo');
+      const { syncAllRecipesToCloud } = await import('../src/storage/cloudSync');
+      const recipes = await listRecipes();
+
+      if (recipes.length === 0) {
+        Alert.alert('Nothing to sync', 'No recipes found to sync to cloud.');
+        setSyncing(false);
+        return;
+      }
+
+      const results = await syncAllRecipesToCloud(recipes);
+
+      // Build status message
+      const successResults = results.filter((r) => r.status === 'success');
+      const notConnectedResults = results.filter((r) => r.status === 'not_connected');
+
+      if (successResults.length === 0) {
+        Alert.alert(
+          'Sync failed',
+          'No connected providers could sync recipes. Check your connections and try again.'
+        );
+      } else {
+        const messages: string[] = [];
+        
+        successResults.forEach((r) => {
+          const uploaded = r.recipesUploaded || 0;
+          const failed = r.recipesFailed || 0;
+          if (failed === 0) {
+            messages.push(`${r.providerName}: ${uploaded} recipe${uploaded !== 1 ? 's' : ''}`);
+          } else {
+            messages.push(
+              `${r.providerName}: ${uploaded} synced, ${failed} failed`
+            );
+          }
+        });
+
+        if (notConnectedResults.length > 0) {
+          const notConnectedNames = notConnectedResults.map((r) => r.providerName);
+          messages.push(`\n${notConnectedNames.join(', ')}: not connected`);
+        }
+
+        Alert.alert(
+          'Synced to cloud',
+          `✓ ${messages.join('\n')}`
+        );
+      }
+    } catch (error) {
+      Alert.alert(
+        'Sync failed',
+        `Failed to sync recipes: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
       <Text style={styles.intro}>
-        Offline SQLite is the source of truth. Cloud sync is optional and additive — your own
-        Dropbox, OneDrive, Google Drive, iCloud, or Box via OAuth. No managed server. Enable one or
-        more providers; switch or add later.
+        Your recipes are stored locally on this device. Optionally sync to your personal cloud storage
+        (Dropbox, Google Drive, iCloud, OneDrive, or Box). One-tap connection, no accounts or keys needed.
+        Enable one or more providers below.
       </Text>
+
+      {/* Unified sync button for all connected providers */}
+      <Pressable
+        style={[styles.syncButton, syncing && styles.btnDisabled]}
+        onPress={() => void onSyncToCloud()}
+        disabled={syncing}
+      >
+        <Text style={styles.syncButtonText}>
+          {syncing ? 'Syncing to cloud...' : 'Sync to cloud'}
+        </Text>
+        <Text style={styles.syncButtonHint}>
+          Upload all recipes to connected providers
+        </Text>
+      </Pressable>
 
       <View style={styles.themeCard}>
         <Text style={styles.themeTitle}>Appearance</Text>
@@ -99,7 +192,7 @@ export default function SettingsScreen() {
                   {!a.available
                     ? 'Unavailable on this platform'
                     : isOn
-                      ? 'Stub-connected'
+                      ? 'Connected'
                       : 'Not connected'}
                 </Text>
               </View>
@@ -129,9 +222,8 @@ export default function SettingsScreen() {
       })}
 
       <Text style={styles.footer}>
-        Photo files sync with recipe JSON under /Cupboard Notes/&#123;recipeId&#125;/ via CloudStorageAdapter
-        (upload paths stubbed until OAuth is live). Amazon Drive consumer API is discontinued; Box
-        is included as the fifth provider.
+        Recipes and photos sync to your cloud folder (/Cupboard Notes/recipeId/). Dropbox is live;
+        other providers coming soon. Your data stays in your personal cloud — no managed server.
       </Text>
     </ScrollView>
   );
@@ -140,6 +232,24 @@ export default function SettingsScreen() {
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   scroll: { padding: space.md, paddingBottom: 48, backgroundColor: colors.bg },
   intro: { color: colors.textMuted, lineHeight: 20, marginBottom: space.lg },
+  syncButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    padding: space.md,
+    marginBottom: space.lg,
+    alignItems: 'center',
+  },
+  syncButtonText: {
+    color: colors.onPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  syncButtonHint: {
+    color: colors.onPrimary,
+    fontSize: 12,
+    marginTop: 4,
+    opacity: 0.9,
+  },
   themeCard: {
     backgroundColor: colors.surfaceRaised,
     borderRadius: 12,
@@ -182,6 +292,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
     borderRadius: 8,
+  },
+  btnDisabled: {
+    opacity: 0.5,
   },
   btnText: { color: colors.onPrimary, fontWeight: '600' },
   btnSecondary: {
