@@ -1,17 +1,15 @@
 import type { CloudProviderId, CloudStorageAdapter } from './CloudStorageAdapter';
-import { googleDriveAdapter } from './providers/googleDrive';
-import { iCloudAdapter } from './providers/iCloud';
 import { dropboxAdapter } from './providers/dropbox';
-import { oneDriveAdapter } from './providers/oneDrive';
-import { boxAdapter } from './providers/box';
+import { localFilesystemAdapter } from './providers/localFilesystem';
 
-/** Ordered top-5 consumer cloud providers (2025–2026). */
+/**
+ * Available storage adapters.
+ * Currently limited to Dropbox and Local Filesystem (working implementations).
+ * Other providers (Google Drive, iCloud, OneDrive, Box) are stubs for future milestones.
+ */
 export const ALL_CLOUD_ADAPTERS: CloudStorageAdapter[] = [
-  googleDriveAdapter,
-  iCloudAdapter,
+  localFilesystemAdapter,
   dropboxAdapter,
-  oneDriveAdapter,
-  boxAdapter,
 ];
 
 const byId = Object.fromEntries(ALL_CLOUD_ADAPTERS.map((a) => [a.id, a])) as Record<

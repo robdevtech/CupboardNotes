@@ -46,6 +46,8 @@ export default function RecipeEditScreen() {
   const [sourceUrl, setSourceUrl] = useState('');
   const [photos, setPhotos] = useState<RecipePhoto[]>([]);
   const [fixedIds, setFixedIds] = useState<Record<string, boolean>>({});
+  const [tags, setTags] = useState<string[]>([]);
+  const [customTagInput, setCustomTagInput] = useState('');
 
   useEffect(() => {
     if (!id) return;
@@ -70,6 +72,7 @@ export default function RecipeEditScreen() {
       );
       setSourceUrl(r.sourceUrl ?? '');
       setPhotos(r.photos);
+      setTags(r.tags || []);
       const flags: Record<string, boolean> = {};
       r.ingredients.forEach((i) => {
         if (i.scaleMode === 'fixed') flags[i.raw] = true;
@@ -113,6 +116,7 @@ export default function RecipeEditScreen() {
         steps: linesToSteps(stepsText),
         photos,
         sourceUrl: sourceUrl.trim() || null,
+        tags,
       };
       if (id) {
         await repo.updateRecipe(id, draft);
@@ -157,6 +161,28 @@ export default function RecipeEditScreen() {
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean);
+
+  const presetTags = ['breakfast', 'lunch', 'dinner', 'coffee', 'party'];
+
+  const toggleTag = (tag: string) => {
+    if (tags.includes(tag)) {
+      setTags(tags.filter((t) => t !== tag));
+    } else {
+      setTags([...tags, tag]);
+    }
+  };
+
+  const addCustomTag = () => {
+    const trimmed = customTagInput.trim().toLowerCase();
+    if (trimmed && !tags.includes(trimmed)) {
+      setTags([...tags, trimmed]);
+      setCustomTagInput('');
+    }
+  };
+
+  const removeTag = (tag: string) => {
+    setTags(tags.filter((t) => t !== tag));
+  };
 
   return (
     <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
@@ -222,6 +248,61 @@ export default function RecipeEditScreen() {
         placeholder="https://…"
         autoCapitalize="none"
       />
+
+      <View style={styles.field}>
+        <Text style={styles.label}>Tags</Text>
+        <View style={styles.tagsSection}>
+          <View style={styles.tagsRow}>
+            {presetTags.map((tag) => (
+              <Pressable
+                key={tag}
+                style={StyleSheet.flatten([
+                  styles.tag,
+                  tags.includes(tag) && styles.tagSelected,
+                ])}
+                onPress={() => toggleTag(tag)}
+              >
+                <Text
+                  style={StyleSheet.flatten([
+                    styles.tagText,
+                    tags.includes(tag) && styles.tagTextSelected,
+                  ])}
+                >
+                  {tag}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          {tags.filter((t) => !presetTags.includes(t)).map((tag) => (
+            <Pressable
+              key={tag}
+              style={StyleSheet.flatten([styles.tag, styles.tagSelected])}
+              onPress={() => removeTag(tag)}
+            >
+              <Text style={styles.tagTextSelected}>{tag}</Text>
+              <Text style={styles.tagRemove}> ×</Text>
+            </Pressable>
+          ))}
+          <View style={styles.customTagRow}>
+            <TextInput
+              style={styles.customTagInput}
+              value={customTagInput}
+              onChangeText={setCustomTagInput}
+              placeholder="Add custom tag"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              onSubmitEditing={addCustomTag}
+            />
+            <Pressable
+              style={styles.customTagBtn}
+              onPress={addCustomTag}
+              disabled={!customTagInput.trim()}
+            >
+              <Text style={styles.customTagBtnText}>+</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
 
       <PhotoGallery
         photos={photos}
@@ -300,4 +381,42 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: 4,
   },
   fixedLine: { flex: 1, fontSize: 13, color: colors.text },
+  tagsSection: { gap: space.sm },
+  tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  tag: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: colors.chip,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  tagSelected: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primary,
+  },
+  tagText: { fontSize: 13, color: colors.text, fontWeight: '500' },
+  tagTextSelected: { color: colors.primary, fontWeight: '600' },
+  tagRemove: { fontSize: 16, color: colors.primary, fontWeight: '600' },
+  customTagRow: { flexDirection: 'row', gap: space.sm, alignItems: 'center' },
+  customTagInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: space.sm,
+    paddingVertical: 8,
+    backgroundColor: colors.surface,
+    color: colors.text,
+    fontSize: 14,
+  },
+  customTagBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customTagBtnText: { fontSize: 20, color: colors.onPrimary, fontWeight: '700' },
 });

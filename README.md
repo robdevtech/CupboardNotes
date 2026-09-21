@@ -68,25 +68,49 @@ Then open in Expo Go (phone/tablet), iOS Simulator, Android emulator, or `w` for
 - [x] `expo-secure-store` wrapper for future OAuth tokens
 - [x] README with architecture, Mealie/AGPL note, run instructions
 
+### Completed features (Wishlist integration)
+
+- [x] **Checkable instruction steps** — tap to check off steps while cooking; persists session state
+- [x] **Recipe tags** — preset tags (breakfast, lunch, dinner, coffee, party) + custom tags; shown on cards
+- [x] **Search & filter** — search by title/description/notes/ingredients; filter by included/excluded tags
+- [x] **Grocery list** — select recipes to generate shopping list; merge ingredients; checkable items; local persistence
+- [x] **Cooking mode** — large step display, main timer + per-step timers, keep-screen-awake, check-off integration
+- [x] **Share & import recipes with friends** — improved JSON export/import for portable recipe sharing
+- [x] **Recommendations feed** — curated seasonal recipes with one-tap import from `recommendations.json` (in-repo or fetched from GitHub)
+- [x] **Local filesystem storage** — store recipe bundles in app Documents directory; participates in multi-store sync
+- [x] **Multi-store sync** — last-write-wins merge strategy across Local + Dropbox (and future providers); recipe manifests per store; bidirectional sync
+
 ### Stubbed / next milestones
 
-- [ ] Live OAuth (PKCE) for Google Drive, Dropbox, OneDrive, Box via `expo-auth-session`
+- [ ] Live OAuth (PKCE) for Dropbox, Google Drive, OneDrive, Box via `expo-auth-session`
 - [ ] Real iCloud ubiquity container / CloudKit in a custom dev client
-- [ ] Persist enabled-provider prefs; bidirectional cloud sync of `recipe.json` + photo binaries under `/Cupboard Notes/{recipeId}/`
 - [ ] Persist scale-mode overrides more richly; unit convert UI
 - [ ] Stronger HTML heuristics when JSON-LD missing
-- [ ] Search / tags / collections
 - [ ] Automated tests for parsers & scale
 
-### Cloud OAuth / scopes (planned)
+### Storage sync strategy
 
-| Provider | Auth approach | Scopes / notes |
-|----------|---------------|----------------|
-| Google Drive | OAuth 2.0 PKCE | `drive.file`; folder `/Cupboard Notes` |
-| iCloud | Apple ubiquity / CloudKit | iOS only; no classic OAuth client |
-| Dropbox | OAuth 2.0 PKCE | app-folder; `files.content.read/write` |
-| OneDrive | Azure AD v2 / Graph | `Files.ReadWrite`, `offline_access` |
-| Box | OAuth 2.0 | `root_readwrite` (narrow later) |
+**Multi-store consistency (last-write-wins):**
+
+1. Recipe bundles stored as `/Cupboard Notes/{recipeId}/recipe.json` + `photos/*` in each enabled store
+2. Each store maintains a `manifest.json` with recipe IDs, titles, and `updatedAt` timestamps
+3. On sync:
+   - Pull manifests from all connected stores (Local Folder, Dropbox, etc.)
+   - Merge per-recipe by newest `updatedAt` (last write wins)
+   - Update local SQLite as source of truth
+   - Push merged set to all connected stores
+4. Fully offline-capable; no backend required
+
+**Available storage providers:**
+
+| Provider | Status | Notes |
+|----------|--------|-------|
+| **Local Folder** | ✅ Working | App Documents directory; always available |
+| **Dropbox** | ⚠️ OAuth stub | Planned: OAuth 2.0 PKCE, `files.content.read/write` |
+| Google Drive | Stub only | Planned: OAuth 2.0 PKCE, `drive.file` scope |
+| iCloud | Stub only | Planned: iOS ubiquity container / CloudKit |
+| OneDrive | Stub only | Planned: Azure AD v2 / Graph, `Files.ReadWrite` |
+| Box | Stub only | Planned: OAuth 2.0, `root_readwrite` |
 
 Tokens: `expo-secure-store` only. Never a central Cupboard Notes server.
 

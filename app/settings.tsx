@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, Switch, Alert, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView, Switch, Alert, Platform, ActivityIndicator } from 'react-native';
 import { listAdapters } from '../src/cloud/registry';
+import { syncAllStores } from '../src/cloud/syncManager';
 import type { CloudProviderId } from '../src/cloud/CloudStorageAdapter';
 import { useSettingsStore } from '../src/store/settingsStore';
 import { useTheme, space, type ThemeColors, type ThemeMode } from '../src/ui/theme';
@@ -11,6 +12,7 @@ export default function SettingsScreen() {
   const adapters = listAdapters();
   const { enabledProviders, toggleProvider, themePreference, setThemePreference } = useSettingsStore();
   const [connected, setConnected] = useState<Record<string, boolean>>({});
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -61,13 +63,50 @@ export default function SettingsScreen() {
     setConnected((c) => ({ ...c, [id]: false }));
   };
 
+  const onSync = async () => {
+    setSyncing(true);
+    try {
+      const result = await syncAllStores();
+      
+      if (result.errors.length > 0) {
+        Alert.alert(
+          'Sync completed with errors',
+          `Pulled: ${result.pulledCount}, Pushed: ${result.pushedCount}, Conflicts: ${result.conflictsResolved}\n\nErrors:\n${result.errors.join('\n')}`
+        );
+      } else {
+        Alert.alert(
+          'Sync complete',
+          `✓ Pulled ${result.pulledCount} recipes\n✓ Pushed ${result.pushedCount} recipes\n✓ Resolved ${result.conflictsResolved} conflicts`
+        );
+      }
+    } catch (e) {
+      Alert.alert('Sync failed', e instanceof Error ? e.message : 'Unknown error');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
       <Text style={styles.intro}>
-        Offline SQLite is the source of truth. Cloud sync is optional and additive — your own
-        Dropbox, OneDrive, Google Drive, iCloud, or Box via OAuth. No managed server. Enable one or
-        more providers; switch or add later.
+        Offline SQLite is the source of truth. Storage sync is optional and additive. Enable Local
+        Folder to keep recipes in your device's Documents directory, or Dropbox (OAuth stub) for
+        cloud storage. Multi-store sync uses last-write-wins merge. No managed server.
       </Text>
+
+      {Object.values(connected).some(Boolean) && (
+        <Pressable
+          style={StyleSheet.flatten([styles.syncBtn, syncing && styles.syncBtnDisabled])}
+          onPress={() => void onSync()}
+          disabled={syncing}
+        >
+          {syncing ? (
+            <ActivityIndicator color={colors.onPrimary} />
+          ) : (
+            <Text style={styles.syncBtnText}>Sync All Stores</Text>
+          )}
+        </Pressable>
+      )}
 
       <View style={styles.themeCard}>
         <Text style={styles.themeTitle}>Appearance</Text>
@@ -129,9 +168,9 @@ export default function SettingsScreen() {
       })}
 
       <Text style={styles.footer}>
-        Photo files sync with recipe JSON under /Cupboard Notes/&#123;recipeId&#125;/ via CloudStorageAdapter
-        (upload paths stubbed until OAuth is live). Amazon Drive consumer API is discontinued; Box
-        is included as the fifth provider.
+        Recipe bundles are stored as /Cupboard Notes/&#123;recipeId&#125;/recipe.json + photos/* in each
+        enabled store. Multi-store sync merges by newest updatedAt (last-write-wins). Other cloud
+        providers (Google Drive, iCloud, OneDrive, Box) are stubbed for future OAuth implementation.
       </Text>
     </ScrollView>
   );
@@ -191,5 +230,16 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: 8,
   },
   btnSecondaryText: { color: colors.text, fontWeight: '600' },
+  syncBtn: {
+    backgroundColor: colors.success,
+    paddingVertical: space.md,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: space.lg,
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  syncBtnDisabled: { opacity: 0.6 },
+  syncBtnText: { color: colors.onPrimary, fontWeight: '700', fontSize: 16 },
   footer: { fontSize: 12, color: colors.textMuted, lineHeight: 18, marginTop: space.md },
 });
