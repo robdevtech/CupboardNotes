@@ -65,8 +65,8 @@ export default function SettingsScreen() {
     <ScrollView contentContainerStyle={styles.scroll}>
       <Text style={styles.intro}>
         Offline SQLite is the source of truth. Cloud sync is optional and additive — your own
-        Dropbox, OneDrive, Google Drive, iCloud, or Box via OAuth. No managed server. Enable one or
-        more providers; switch or add later.
+        Dropbox via OAuth. No managed server. Additional cloud providers (Google Drive, iCloud,
+        OneDrive, Box) are planned for future releases.
       </Text>
 
       <View style={styles.themeCard}>
@@ -129,9 +129,8 @@ export default function SettingsScreen() {
       })}
 
       <Text style={styles.footer}>
-        Photo files sync with recipe JSON under /Cupboard Notes/&#123;recipeId&#125;/ via CloudStorageAdapter
-        (upload paths stubbed until OAuth is live). Amazon Drive consumer API is discontinued; Box
-        is included as the fifth provider.
+        Photo files sync with recipe JSON under /Cupboard Notes/&#123;recipeId&#125;/ via CloudStorageAdapter.
+        Dropbox is the currently supported provider; additional cloud storage options coming soon.
       </Text>
     </ScrollView>
   );

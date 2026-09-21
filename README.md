@@ -1,6 +1,6 @@
 # Cupboard Notes
 
-Offline-first mobile recipe app built with **Expo + TypeScript**. Your recipes live in on-device SQLite; optional sync uses **your** cloud (Google Drive, iCloud, Dropbox, OneDrive, or Box). No managed server. Free, client-side only.
+Offline-first mobile recipe app built with **Expo + TypeScript**. Your recipes live in on-device SQLite; optional sync uses **your** cloud (Dropbox currently supported; Google Drive, iCloud, OneDrive, and Box planned). No managed server. Free, client-side only.
 
 > **Mealie note:** Cupboard Notes borrows *concepts* only (schema.org JSON-LD import, serving scale pipeline). **No Mealie/AGPL code was copied.** Parsers and types are original TypeScript preferring [schema.org/Recipe](https://schema.org/Recipe).
 
@@ -57,20 +57,18 @@ Then open in Expo Go (phone/tablet), iOS Simulator, Android emulator, or `w` for
 - [x] Photos: import URLs cached locally; camera + gallery via `expo-image-picker`; gallery on detail/edit
 - [x] Share recipe as JSON via OS share sheet (`expo-sharing` + Share fallback)
 - [x] Tablet split layout (ingredients | instructions)
-- [x] Pluggable **top-5** cloud adapters behind `CloudStorageAdapter`:
-  1. Google Drive (stub furthest — session + syncRecipeBundle path)
-  2. iCloud Drive (iOS-only; Android gracefully unavailable)
-  3. Dropbox
-  4. OneDrive (Microsoft Graph)
-  5. Box (replaces discontinued Amazon Drive consumer API)
-- [x] Settings UI: multi-select enable/disable providers; connect/disconnect stubs
+- [x] Pluggable cloud adapter architecture behind `CloudStorageAdapter`
+- [x] Dropbox cloud storage integration (currently the only active provider in Settings UI)
+- [x] Additional provider adapters implemented but not exposed (Google Drive, iCloud, OneDrive, Box) — ready for future activation
+- [x] Settings UI: enable/disable providers; connect/disconnect
 - [x] Full light/dark kitchen themes with System/Light/Dark preference persisted in SecureStore
 - [x] `expo-secure-store` wrapper for future OAuth tokens
 - [x] README with architecture, Mealie/AGPL note, run instructions
 
 ### Stubbed / next milestones
 
-- [ ] Live OAuth (PKCE) for Google Drive, Dropbox, OneDrive, Box via `expo-auth-session`
+- [ ] Live Dropbox OAuth (PKCE) via `expo-auth-session` and full sync implementation
+- [ ] Activate additional providers: Google Drive, OneDrive, Box OAuth (PKCE) via `expo-auth-session`
 - [ ] Real iCloud ubiquity container / CloudKit in a custom dev client
 - [ ] Persist enabled-provider prefs; bidirectional cloud sync of `recipe.json` + photo binaries under `/Cupboard Notes/{recipeId}/`
 - [ ] Persist scale-mode overrides more richly; unit convert UI
