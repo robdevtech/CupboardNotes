@@ -158,7 +158,7 @@ export const dropboxAdapter: CloudStorageAdapter = {
   id: 'dropbox',
   displayName: 'Dropbox',
   authNotes:
-    'OAuth 2.0 PKCE with offline access. Full Dropbox access, syncs to /Cupboard Notes folder. Requires DROPBOX_APP_KEY in app config.',
+    'Cloud sync to your personal Dropbox. Stores recipes in /Cupboard Notes folder. One-tap OAuth connection.',
   available: true,
 
   async isConnected() {
@@ -180,7 +180,7 @@ export const dropboxAdapter: CloudStorageAdapter = {
   async connect(): Promise<CloudAuthSession> {
     if (!DROPBOX_APP_KEY) {
       throw new Error(
-        'DROPBOX_APP_KEY not configured. Set it in app.json extra.DROPBOX_APP_KEY or use EXPO_PUBLIC_DROPBOX_APP_KEY environment variable.'
+        'Dropbox app key not configured. This is a developer setup issue.\n\nAdd EXPO_PUBLIC_DROPBOX_APP_KEY to your .env file or DROPBOX_APP_KEY to app.json extra.\n\nSee README "For Developers" section.'
       );
     }
 

@@ -47,9 +47,14 @@ export default function SettingsScreen() {
         `${adapter.displayName} connected successfully!${session.accountLabel ? `\n\nAccount: ${session.accountLabel}` : ''}`
       );
     } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : 'Connection failed';
+      const isDeveloperError = errorMessage.includes('developer setup') || errorMessage.includes('not configured');
+      
       Alert.alert(
         adapter.displayName,
-        `${e instanceof Error ? e.message : 'Connection failed'}\n\n${adapter.authNotes}`
+        isDeveloperError 
+          ? errorMessage
+          : `Failed to connect to ${adapter.displayName}. Please try again.\n\n${errorMessage}`
       );
     }
   };
@@ -64,9 +69,9 @@ export default function SettingsScreen() {
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
       <Text style={styles.intro}>
-        Offline SQLite is the source of truth. Cloud sync is optional and additive — your own
-        Dropbox, OneDrive, Google Drive, iCloud, or Box via OAuth. No managed server. Enable one or
-        more providers; switch or add later.
+        Your recipes are stored locally on this device. Optionally sync to your personal cloud storage
+        (Dropbox, Google Drive, iCloud, OneDrive, or Box). One-tap connection, no accounts or keys needed.
+        Enable one or more providers below.
       </Text>
 
       <View style={styles.themeCard}>
@@ -129,9 +134,8 @@ export default function SettingsScreen() {
       })}
 
       <Text style={styles.footer}>
-        Photo files sync with recipe JSON under /Cupboard Notes/&#123;recipeId&#125;/ via CloudStorageAdapter
-        (upload paths stubbed until OAuth is live). Amazon Drive consumer API is discontinued; Box
-        is included as the fifth provider.
+        Recipes and photos sync to your cloud folder (/Cupboard Notes/recipeId/). Dropbox is live;
+        other providers coming soon. Your data stays in your personal cloud — no managed server.
       </Text>
     </ScrollView>
   );
