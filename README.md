@@ -18,6 +18,76 @@ Then open in Expo Go (phone/tablet), iOS Simulator, Android emulator, or `w` for
 
 **Scripts:** `npm start` · `npm run ios` · `npm run android` · `npm run web`
 
+## Releases and friend testing
+
+Cupboard Notes uses **EAS Build** to create Android APK files for sideloading and friend testing. APKs are attached to GitHub Releases on this repository — **no APK binaries are committed to the main branch**.
+
+### Prerequisites
+
+1. **Expo account**: Sign up at [expo.dev](https://expo.dev) if you don't have one
+2. **EAS CLI**: Install globally with `npm install -g eas-cli`
+3. **Login**: Run `eas login` and authenticate with your Expo account
+4. **Link project**: Run `eas init` in the project root to create an EAS project and add the `extra.eas.projectId` to `app.json`
+
+### Building an Android APK
+
+Once the project is linked, build an APK with:
+
+```bash
+npm run eas:build:android:apk
+```
+
+This uses the `preview` profile in `eas.json` and produces an installable `.apk` file suitable for:
+- Direct installation on Android devices via USB or file sharing
+- Friend testing and internal distribution
+- Future F-Droid custom repository
+
+EAS Build runs in the cloud and will prompt for Android keystore credentials on first build (EAS can generate and manage them for you).
+
+### Environment variables for builds
+
+The Dropbox integration requires `EXPO_PUBLIC_DROPBOX_APP_KEY` to be set for the app to connect to Dropbox. For EAS builds:
+
+1. Set the secret via EAS CLI:
+   ```bash
+   eas secret:create --scope project --name EXPO_PUBLIC_DROPBOX_APP_KEY --value your-dropbox-app-key --type string
+   ```
+
+2. Or add it via the Expo dashboard at [expo.dev](https://expo.dev/accounts/[account]/projects/[project]/secrets)
+
+The build profiles in `eas.json` reference this environment variable, and it will be baked into the APK at build time.
+
+### Attaching APK to GitHub Release
+
+After EAS Build completes, download the APK and attach it to a GitHub Release:
+
+1. **Download the APK**: EAS provides a download link when the build finishes, or visit the [EAS dashboard](https://expo.dev/accounts/[account]/projects/[project]/builds)
+
+2. **Create a GitHub Release**:
+   ```bash
+   gh release create v1.0.0 \
+     --title "Cupboard Notes v1.0.0" \
+     --notes "Release notes here" \
+     cupboard-notes-v1.0.0.apk
+   ```
+
+3. **Share the Release URL** with friends for testing: `https://github.com/robdevtech/CupboardNotes/releases`
+
+### Additional build profiles
+
+- **`npm run eas:build:android:aab`**: Builds an Android App Bundle (AAB) for Google Play Store submission (`production` profile)
+- **`npm run eas:build:ios`**: Builds for iOS (`production` profile, requires Apple Developer account)
+
+### CI automation (optional)
+
+A GitHub Actions workflow can automate downloading completed EAS builds and attaching them to releases. See `.github/workflows/eas-release.yml` for an example that:
+- Triggers on version tags (e.g. `v1.0.0`)
+- Waits for the EAS build to complete
+- Downloads the APK artifact
+- Attaches it to a GitHub Release
+
+This requires `EXPO_TOKEN` to be set as a repository secret (generate one with `eas build:token:create` or from your Expo account settings).
+
 ## Architecture
 
 ```
