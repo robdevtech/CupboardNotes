@@ -12,7 +12,9 @@ Branch: `cursor/github-issue-reporting-aea5`
 
 ## 📋 What Was Implemented
 
-### Core Feature
+### Core Features
+
+#### 1. GitHub Issue Reporting
 Added a "Report on GitHub" button to the import failure alert that:
 - Appears when any recipe URL import fails
 - Opens GitHub's new issue page in the user's browser or GitHub app
@@ -20,10 +22,19 @@ Added a "Report on GitHub" button to the import failure alert that:
 - Includes failed URL, error message, app version, and platform
 - Properly encodes all data using URLSearchParams
 
+#### 2. Crypto Fix (CRITICAL)
+Fixed `crypto.getRandomValues() not supported` error in Expo Go:
+- Replaced `uuid` package with `expo-crypto`'s `randomUUID()`
+- Fixes crash when importing recipes in Expo Go
+- Reduces bundle size (914 web modules vs 928, 1308 Android modules vs 1322)
+- Native crypto support for React Native environments
+
 ### Technical Changes
 
 **Modified Files:**
 - `app/import.tsx` - Added GitHub issue reporting functionality
+- `src/domain/ids.ts` - Replaced uuid with expo-crypto for ID generation
+- `package.json` - Added expo-crypto, removed uuid and @types/uuid
 
 **New Files:**
 - `TESTING_GITHUB_ISSUE_FEATURE.md` - Comprehensive test guide with 9 test scenarios
@@ -46,6 +57,7 @@ Added a "Report on GitHub" button to the import failure alert that:
 3. **Error Handling**: Catches and displays errors if URL opening fails
 
 ### Dependencies Used
+- `expo-crypto` (newly added) - Native UUID generation for React Native
 - `expo-linking` (already installed) - Opens GitHub URL
 - `expo-constants` (already installed) - Gets app version
 - `Platform` from React Native - Detects iOS/Android/web
@@ -59,9 +71,16 @@ Added a "Report on GitHub" button to the import failure alert that:
 
 ### Build Tests
 ```bash
-✓ Web export: 928 modules bundled successfully
-✓ Android export: 1322 modules bundled successfully
+✓ Web export: 914 modules bundled successfully (reduced from 928)
+✓ Android export: 1308 modules bundled successfully (reduced from 1322)
 ✓ Hermes bytecode generation successful
+```
+
+### Critical Fixes
+```bash
+✓ crypto.getRandomValues() error fixed - imports now work in Expo Go
+✓ UUID generation works natively without web polyfills
+✓ Removed uuid dependency - cleaner dependency tree
 ```
 
 ### Compatibility
@@ -144,9 +163,12 @@ Added a "Report on GitHub" button to the import failure alert that:
 
 ## 📝 Commits
 
-1. `62574b8` - Add GitHub issue reporting for failed recipe imports
-2. `9f535e4` - Add comprehensive testing guide for GitHub issue reporting feature
-3. `255b4e4` - Add visual flow documentation for GitHub issue reporting feature
+1. `406852b` - Remove uuid and @types/uuid dependencies
+2. `52f495d` - Fix crypto.getRandomValues() error in Expo Go by using expo-crypto
+3. `df527b5` - Add implementation summary document
+4. `62574b8` - Add GitHub issue reporting for failed recipe imports
+5. `9f535e4` - Add comprehensive testing guide for GitHub issue reporting feature
+6. `255b4e4` - Add visual flow documentation for GitHub issue reporting feature
 
 Plus inherited from PR #1:
 - `acd4b48` - Fix Slot style array warning by flattening all style arrays

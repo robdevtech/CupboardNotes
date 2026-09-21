@@ -6,6 +6,8 @@ This document provides comprehensive test instructions for the new GitHub issue 
 
 When a recipe URL import fails, users now see a "Report on GitHub" button in the error alert. This button opens GitHub's new issue page with prefilled information about the failure, making it easy to track and debug failed imports.
 
+**CRITICAL FIX**: This PR also fixes the `crypto.getRandomValues() not supported` error that prevented imports from working in Expo Go. The app now uses `expo-crypto` for native UUID generation instead of the web-based `uuid` package.
+
 ## Prerequisites
 
 1. Install dependencies:
@@ -176,6 +178,28 @@ This test verifies error handling when the URL cannot be opened.
 **Expected Result:**
 - If `Linking.openURL` fails, a second alert appears: "Could not open GitHub" with the error message
 
+### Test 10: Crypto Fix - Successful Import in Expo Go (CRITICAL)
+
+This test verifies the `crypto.getRandomValues()` fix that prevented imports from working.
+
+**Steps:**
+1. Navigate to the Import screen in Expo Go (on Android or iOS device)
+2. Enter a valid recipe URL with JSON-LD (e.g., `https://www.bbcgoodfood.com/recipes/easy-millionaires-shortbread`)
+3. Tap "Import JSON-LD"
+
+**Expected Result:**
+- ✅ Import succeeds without `crypto.getRandomValues() not supported` error
+- ✅ Recipe is imported and you're redirected to the detail screen
+- ✅ Recipe ingredients and steps are populated
+- ✅ No alert appears (import works correctly)
+
+**Previous Behavior (Bug):**
+- ❌ Import failed immediately with alert: "crypto.getRandomValues() not supported. See https://github.com/uuidjs/uuid#getrandomvalues-not-supported"
+- ❌ User was forced to paste manually even though the URL had valid recipe data
+
+**Why This Was Critical:**
+This bug completely broke recipe imports in Expo Go, the primary way users test the app during development. The `uuid` package relied on web crypto APIs that don't exist in React Native. We fixed it by replacing `uuid` with `expo-crypto`, which provides native UUID generation.
+
 ## Checklist
 
 - [ ] Test 1: Non-HTTPS URL - Report button works
@@ -186,6 +210,8 @@ This test verifies error handling when the URL cannot be opened.
 - [ ] Test 6: Platform detection - Correct platform in issue body (android/ios/web)
 - [ ] Test 7: Existing buttons - "Paste manually" and "OK" still work
 - [ ] Test 8: Empty URL - Import button disabled (prevents alert)
+- [ ] Test 9: Error opening GitHub - Graceful error handling
+- [ ] Test 10: **Crypto fix - Successful import in Expo Go without getRandomValues error** ⭐ **CRITICAL**
 - [ ] TypeScript build - No type errors (`npx tsc --noEmit`)
 - [ ] Android export - Builds successfully (`npx expo export --platform android`)
 - [ ] Web export - Builds successfully (`npx expo export --platform web`)
