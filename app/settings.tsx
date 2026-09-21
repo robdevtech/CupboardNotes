@@ -11,7 +11,7 @@ export default function SettingsScreen() {
   const adapters = listAdapters();
   const { enabledProviders, toggleProvider, themePreference, setThemePreference } = useSettingsStore();
   const [connected, setConnected] = useState<Record<string, boolean>>({});
-  const [syncing, setSyncing] = useState<Record<string, boolean>>({});
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -67,60 +67,76 @@ export default function SettingsScreen() {
     setConnected((c) => ({ ...c, [id]: false }));
   };
 
-  const onSync = async (id: CloudProviderId) => {
-    const adapter = adapters.find((a) => a.id === id);
-    if (!adapter || !adapter.syncRecipeBundle) return;
+  const onSyncToCloud = async () => {
+    // Check if any provider is connected and supports sync
+    const hasConnectedSyncProvider = adapters.some(
+      (a) => connected[a.id] && a.syncRecipeBundle
+    );
 
-    setSyncing((s) => ({ ...s, [id]: true }));
+    if (!hasConnectedSyncProvider) {
+      Alert.alert(
+        'No cloud storage connected',
+        'Connect at least one cloud provider (like Dropbox) to sync your recipes.'
+      );
+      return;
+    }
+
+    setSyncing(true);
 
     try {
       const { listRecipes } = await import('../src/storage/recipeRepo');
+      const { syncAllRecipesToCloud } = await import('../src/storage/cloudSync');
       const recipes = await listRecipes();
 
       if (recipes.length === 0) {
-        Alert.alert('Nothing to sync', 'No recipes found to sync to Dropbox.');
-        setSyncing((s) => ({ ...s, [id]: false }));
+        Alert.alert('Nothing to sync', 'No recipes found to sync to cloud.');
+        setSyncing(false);
         return;
       }
 
-      let synced = 0;
-      let failed = 0;
+      const results = await syncAllRecipesToCloud(recipes);
 
-      for (const recipe of recipes) {
-        try {
-          const recipeJson = JSON.stringify(recipe, null, 2);
-          const photos = (recipe.photos || []).map((p) => ({
-            fileName: p.localUri?.split('/').pop() || `photo-${Date.now()}.jpg`,
-            localUri: p.localUri || '',
-          })).filter(p => p.localUri); // Only include photos with valid localUri
+      // Build status message
+      const successResults = results.filter((r) => r.status === 'success');
+      const notConnectedResults = results.filter((r) => r.status === 'not_connected');
 
-          await adapter.syncRecipeBundle(recipe.id, recipeJson, photos);
-          synced++;
-        } catch (error) {
-          console.error(`Failed to sync recipe ${recipe.id}:`, error);
-          failed++;
-        }
-      }
-
-      setSyncing((s) => ({ ...s, [id]: false }));
-
-      if (failed === 0) {
+      if (successResults.length === 0) {
         Alert.alert(
-          'Synced to Dropbox',
-          `Successfully synced ${synced} recipe${synced !== 1 ? 's' : ''} to your Dropbox!`
+          'Sync failed',
+          'No connected providers could sync recipes. Check your connections and try again.'
         );
       } else {
+        const messages: string[] = [];
+        
+        successResults.forEach((r) => {
+          const uploaded = r.recipesUploaded || 0;
+          const failed = r.recipesFailed || 0;
+          if (failed === 0) {
+            messages.push(`${r.providerName}: ${uploaded} recipe${uploaded !== 1 ? 's' : ''}`);
+          } else {
+            messages.push(
+              `${r.providerName}: ${uploaded} synced, ${failed} failed`
+            );
+          }
+        });
+
+        if (notConnectedResults.length > 0) {
+          const notConnectedNames = notConnectedResults.map((r) => r.providerName);
+          messages.push(`\n${notConnectedNames.join(', ')}: not connected`);
+        }
+
         Alert.alert(
-          'Sync completed with errors',
-          `Synced ${synced} recipe${synced !== 1 ? 's' : ''}, ${failed} failed. Check your connection and try again.`
+          'Synced to cloud',
+          `✓ ${messages.join('\n')}`
         );
       }
     } catch (error) {
-      setSyncing((s) => ({ ...s, [id]: false }));
       Alert.alert(
         'Sync failed',
         `Failed to sync recipes: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -131,6 +147,20 @@ export default function SettingsScreen() {
         (Dropbox, Google Drive, iCloud, OneDrive, or Box). One-tap connection, no accounts or keys needed.
         Enable one or more providers below.
       </Text>
+
+      {/* Unified sync button for all connected providers */}
+      <Pressable
+        style={[styles.syncButton, syncing && styles.btnDisabled]}
+        onPress={() => void onSyncToCloud()}
+        disabled={syncing}
+      >
+        <Text style={styles.syncButtonText}>
+          {syncing ? 'Syncing to cloud...' : 'Sync to cloud'}
+        </Text>
+        <Text style={styles.syncButtonHint}>
+          Upload all recipes to connected providers
+        </Text>
+      </Pressable>
 
       <View style={styles.themeCard}>
         <Text style={styles.themeTitle}>Appearance</Text>
@@ -153,8 +183,6 @@ export default function SettingsScreen() {
       {adapters.map((a) => {
         const enabled = enabledProviders.includes(a.id);
         const isOn = !!connected[a.id];
-        const isSyncing = !!syncing[a.id];
-        const canSync = isOn && a.syncRecipeBundle;
         return (
           <View key={a.id} style={StyleSheet.flatten([styles.card, !a.available && styles.cardDisabled])}>
             <View style={styles.cardHeader}>
@@ -185,15 +213,6 @@ export default function SettingsScreen() {
               >
                 <Text style={styles.btnText}>Connect</Text>
               </Pressable>
-              {canSync && (
-                <Pressable
-                  style={[styles.btn, isSyncing && styles.btnDisabled]}
-                  onPress={() => void onSync(a.id)}
-                  disabled={isSyncing}
-                >
-                  <Text style={styles.btnText}>{isSyncing ? 'Syncing...' : 'Sync Now'}</Text>
-                </Pressable>
-              )}
               <Pressable style={styles.btnSecondary} onPress={() => void onDisconnect(a.id)}>
                 <Text style={styles.btnSecondaryText}>Disconnect</Text>
               </Pressable>
@@ -213,6 +232,24 @@ export default function SettingsScreen() {
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   scroll: { padding: space.md, paddingBottom: 48, backgroundColor: colors.bg },
   intro: { color: colors.textMuted, lineHeight: 20, marginBottom: space.lg },
+  syncButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    padding: space.md,
+    marginBottom: space.lg,
+    alignItems: 'center',
+  },
+  syncButtonText: {
+    color: colors.onPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  syncButtonHint: {
+    color: colors.onPrimary,
+    fontSize: 12,
+    marginTop: 4,
+    opacity: 0.9,
+  },
   themeCard: {
     backgroundColor: colors.surfaceRaised,
     borderRadius: 12,

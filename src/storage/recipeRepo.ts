@@ -1,7 +1,6 @@
 import type { Ingredient, Recipe, RecipeDraft, RecipePhoto, RecipeStep } from '../domain/types';
 import { newId } from '../domain/ids';
 import { getDb } from './db';
-import { autoSyncRecipe } from './cloudSync';
 
 interface RecipeRow {
   id: string;
@@ -85,10 +84,6 @@ export async function createRecipe(draft: RecipeDraft): Promise<Recipe> {
       recipe.updatedAt,
     ]
   );
-  
-  // Auto-sync to connected cloud providers (best-effort, non-blocking)
-  autoSyncRecipe(recipe).catch(() => {});
-  
   return recipe;
 }
 
@@ -129,10 +124,6 @@ export async function updateRecipe(id: string, draft: RecipeDraft): Promise<Reci
       id,
     ]
   );
-  
-  // Auto-sync to connected cloud providers (best-effort, non-blocking)
-  autoSyncRecipe(recipe).catch(() => {});
-  
   return recipe;
 }
 
