@@ -87,7 +87,7 @@ Then open in Expo Go (phone/tablet), iOS Simulator, Android emulator, or `w` for
 | iCloud | Apple ubiquity / CloudKit | iOS only; no classic OAuth client |
 | **Dropbox** | **OAuth 2.0 PKCE** | **✅ LIVE: Full Dropbox, `/Cupboard Notes` folder** |
 | OneDrive | Azure AD v2 / Graph | `Files.ReadWrite`, `offline_access` |
-| Box | OAuth 2.0 | `root_readwrite` (narrow later) |
+| **Box** | **OAuth 2.0** | **✅ LIVE: Full Box access, `/Cupboard Notes` folder** |
 
 Tokens: `expo-secure-store` only. Never a central Cupboard Notes server.
 
@@ -206,6 +206,145 @@ Open in Expo Go or simulator, go to Settings, and tap **Connect Dropbox**. The O
 
 **If app key is missing:**
 Developers will see a clear error message in development. End users of a properly configured build never see configuration prompts.
+
+---
+
+## Box Cloud Storage (Second Live Provider)
+
+Cupboard Notes now supports **real Box cloud storage** with one-tap OAuth connection. End users simply tap **Connect Box** in Settings - no API keys or developer accounts needed.
+
+---
+
+### For End Users
+
+**Connecting Box (one tap):**
+
+1. Open Cupboard Notes
+2. Go to **Settings**
+3. Find **Box** and tap **Connect**
+4. Sign in to Box in your browser (if needed)
+5. Authorize Cupboard Notes
+6. You're connected! Recipes will sync to `/Cupboard Notes` folder
+
+**What syncs:**
+- Recipe JSON files
+- Recipe photos
+- Stored in your Box at `/Cupboard Notes/{recipeId}/`
+
+**Disconnecting:**
+Tap **Disconnect** in Settings to revoke access and clear local tokens.
+
+---
+
+### For Developers (One-Time Setup)
+
+The publisher (robdevtech) has registered a Box app for Cupboard Notes. If you're forking this repo or building your own version, you'll need to create your own Box app and configure the credentials.
+
+**Important:** Box does not support PKCE (Proof Key for Code Exchange) for OAuth 2.0, which means the `client_secret` must be included in the app. This is the same security model as storing API keys - the credentials are embedded in the app bundle. For production apps, consider additional security measures like environment-specific builds and proper secret management.
+
+#### 1. Create a Box App
+
+1. Go to the [Box Developer Console](https://app.box.com/developers/console)
+2. Click **Create New App**
+3. Choose **Custom App**
+4. Choose **User Authentication (OAuth 2.0)**
+5. Enter a name (e.g., `cupboard-notes-yourname`)
+6. Click **Create App**
+
+#### 2. Configure App Scopes
+
+In the **Configuration** tab → **Application Scopes**:
+
+1. Enable these scopes:
+   - **Read and write all files and folders stored in Box**
+2. Click **Save Changes** at the top
+
+#### 3. Configure OAuth Redirect URIs
+
+In the **Configuration** tab → **OAuth 2.0 Redirect URI**:
+
+Add these URIs (one at a time):
+
+```
+cupboardnotes://auth
+https://auth.expo.io/@your-expo-username/cupboard-notes
+```
+
+Replace `your-expo-username` with your actual Expo username for Expo Go testing.
+
+Click **Save Changes** at the top after adding each URI.
+
+#### 4. Get Your Credentials
+
+In the **Configuration** tab, find:
+
+- **Client ID** (looks like `abc123xyz...`)
+- **Client Secret** (click **Fetch Current Secret** to reveal it)
+
+Copy both values.
+
+#### 5. Configure the Build
+
+**Option A: Environment variables (recommended for production)**
+
+Create a `.env` file in the project root:
+
+```bash
+EXPO_PUBLIC_BOX_CLIENT_ID=your-client-id-here
+EXPO_PUBLIC_BOX_CLIENT_SECRET=your-client-secret-here
+```
+
+The `.env` file is already in `.gitignore` to keep your credentials secure.
+
+**Option B: app.json (easier for local testing)**
+
+Add to `app.json`:
+
+```json
+{
+  "expo": {
+    "extra": {
+      "BOX_CLIENT_ID": "your-client-id-here",
+      "BOX_CLIENT_SECRET": "your-client-secret-here"
+    }
+  }
+}
+```
+
+⚠️ **Do not commit your credentials to public repositories.** Use `.env` or EAS Secrets for production.
+
+#### 6. Test
+
+```bash
+npx expo start
+```
+
+Open in Expo Go or simulator, go to Settings, and tap **Connect Box**. The OAuth flow should complete successfully.
+
+---
+
+### Technical Details
+
+- ✅ OAuth 2.0 authentication (Box does not support PKCE)
+- ✅ Automatic token refresh with offline access
+- ✅ Secure token storage in device keychain via `expo-secure-store`
+- ✅ Works in Expo Go and standalone builds
+- ✅ Full Box access with dedicated `/Cupboard Notes` folder
+- ⚠️ Client secret required (embedded in app like API keys)
+
+**If credentials are missing:**
+Developers will see a clear error message in development. End users of a properly configured build never see configuration prompts.
+
+**Security Note:**
+Box's OAuth implementation requires `client_secret` for the authorization code exchange, which means it must be embedded in the mobile app. This is similar to how API keys are typically handled in mobile applications. The credentials enable the app to authenticate on behalf of the user after they've explicitly granted permission through the OAuth flow. For additional security in production:
+
+- Use environment-specific credentials (dev, staging, production)
+- Implement certificate pinning
+- Use EAS Secrets or similar secure secret management
+- Monitor for unauthorized usage through Box's developer console
+- Consider implementing a lightweight proxy for highly sensitive deployments
+
+---
 
 ## License / attribution
 

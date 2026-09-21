@@ -222,7 +222,7 @@ export default function SettingsScreen() {
       })}
 
       <Text style={styles.footer}>
-        Recipes and photos sync to your cloud folder (/Cupboard Notes/recipeId/). Dropbox is live;
+        Recipes and photos sync to your cloud folder (/Cupboard Notes/recipeId/). Dropbox and Box are live;
         other providers coming soon. Your data stays in your personal cloud — no managed server.
       </Text>
     </ScrollView>
