@@ -196,8 +196,20 @@ export const dropboxAdapter: CloudStorageAdapter = {
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
       token_access_type: 'offline',
+      force_reapprove: 'true',
     };
     const authUrl = `${AUTH_ENDPOINT}?${new URLSearchParams(authParams).toString()}`;
+    console.info('[dropbox] OAuth redirect:', REDIRECT_URI);
+    console.info('[dropbox] OAuth URL (no scope param):', authUrl.replace(DROPBOX_APP_KEY, DROPBOX_APP_KEY.slice(0, 4) + '…'));
+
+    const { Alert, Platform } = await import('react-native');
+    await new Promise<void>((resolve) => {
+      Alert.alert(
+        'Dropbox OAuth debug',
+        `App key: ${DROPBOX_APP_KEY}\nRedirect: ${REDIRECT_URI}\nPlatform: ${Platform.OS}\n\nConfirm this App key matches Dropbox Settings exactly, then Continue.`,
+        [{ text: 'Continue', onPress: () => resolve() }]
+      );
+    });
 
     const result = await WebBrowser.openAuthSessionAsync(authUrl, REDIRECT_URI);
 
