@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useMemo } from 'react';
-import { useColorScheme } from 'react-native';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { useColorScheme, Appearance } from 'react-native';
 import { useSettingsStore } from '../store/settingsStore';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
@@ -66,9 +66,39 @@ interface ThemeValue {
 const ThemeContext = createContext<ThemeValue | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const systemScheme = useColorScheme();
+  const hookScheme = useColorScheme();
   const preference = useSettingsStore((s) => s.themePreference);
-  const isDark = preference === 'dark' || (preference === 'system' && systemScheme === 'dark');
+  
+  // Robust system color scheme detection:
+  // 1. useColorScheme() can return null in Expo Go or on initial render
+  // 2. Use Appearance.getColorScheme() as fallback to get current system preference
+  // 3. Listen to Appearance changes to update when system theme changes
+  const [systemScheme, setSystemScheme] = useState<'light' | 'dark' | null>(() => {
+    // Initialize with hookScheme if available, otherwise use Appearance API
+    return hookScheme ?? Appearance.getColorScheme();
+  });
+
+  // Update systemScheme when hookScheme changes (normal React Native path)
+  useEffect(() => {
+    if (hookScheme !== null) {
+      setSystemScheme(hookScheme);
+    }
+  }, [hookScheme]);
+
+  // Add explicit Appearance listener for system theme changes
+  // This ensures we catch changes even if useColorScheme() doesn't update
+  useEffect(() => {
+    const subscription = Appearance.addChangeListener(({ colorScheme }) => {
+      setSystemScheme(colorScheme);
+    });
+    return () => subscription.remove();
+  }, []);
+
+  // Determine dark mode: explicit dark, or system preference when set to system
+  // Default to light when system preference is null/unavailable
+  const isDark =
+    preference === 'dark' || (preference === 'system' && systemScheme === 'dark');
+
   const value = useMemo(
     () => ({
       colors: isDark ? darkColors : lightColors,
