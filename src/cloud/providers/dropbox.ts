@@ -199,17 +199,6 @@ export const dropboxAdapter: CloudStorageAdapter = {
       force_reapprove: 'true',
     };
     const authUrl = `${AUTH_ENDPOINT}?${new URLSearchParams(authParams).toString()}`;
-    console.info('[dropbox] OAuth redirect:', REDIRECT_URI);
-    console.info('[dropbox] OAuth URL (no scope param):', authUrl.replace(DROPBOX_APP_KEY, DROPBOX_APP_KEY.slice(0, 4) + '…'));
-
-    const { Alert, Platform } = await import('react-native');
-    await new Promise<void>((resolve) => {
-      Alert.alert(
-        'Dropbox OAuth debug',
-        `App key: ${DROPBOX_APP_KEY}\nRedirect: ${REDIRECT_URI}\nPlatform: ${Platform.OS}\n\nConfirm this App key matches Dropbox Settings exactly, then Continue.`,
-        [{ text: 'Continue', onPress: () => resolve() }]
-      );
-    });
 
     const result = await WebBrowser.openAuthSessionAsync(authUrl, REDIRECT_URI);
 
@@ -309,21 +298,33 @@ export const dropboxAdapter: CloudStorageAdapter = {
   },
 
   async ensureAppFolder() {
-    const folderPath = '/Cupboard Notes';
+    // For App folder type Dropbox apps, the root IS the app folder.
+    // For Full Dropbox apps, we create /Cupboard Notes.
+    // Try to detect which type by attempting to create the folder.
+    // If we get "not_found" on parent, we're in App folder mode.
     try {
+      const folderPath = '/Cupboard Notes';
       await apiRequest('/files/get_metadata', {
         body: { path: folderPath },
       });
-    } catch {
+      return folderPath;
+    } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : '';
+      if (errorMsg.includes('not_found')) {
+        // Likely App folder type - use root
+        return '';
+      }
+      // Try to create it (Full Dropbox mode)
       try {
         await apiRequest('/files/create_folder_v2', {
-          body: { path: folderPath },
+          body: { path: '/Cupboard Notes' },
         });
-      } catch (error) {
-        throw new Error(`Failed to create app folder: ${error}`);
+        return '/Cupboard Notes';
+      } catch {
+        // If creation fails, assume App folder mode
+        return '';
       }
     }
-    return folderPath;
   },
 
   async list(path: string): Promise<CloudFileInfo[]> {
@@ -388,7 +389,8 @@ export const dropboxAdapter: CloudStorageAdapter = {
     recipeJson: string,
     photos: Array<{ fileName: string; localUri: string }>
   ): Promise<{ recipePath: string; photoPaths: string[] }> {
-    const basePath = `/Cupboard Notes/${recipeId}`;
+    const appFolder = await dropboxAdapter.ensureAppFolder();
+    const basePath = appFolder ? `${appFolder}/${recipeId}` : `/${recipeId}`;
 
     try {
       await apiRequest('/files/create_folder_v2', {

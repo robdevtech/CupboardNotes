@@ -11,6 +11,7 @@ export default function SettingsScreen() {
   const adapters = listAdapters();
   const { enabledProviders, toggleProvider, themePreference, setThemePreference } = useSettingsStore();
   const [connected, setConnected] = useState<Record<string, boolean>>({});
+  const [syncing, setSyncing] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     (async () => {
@@ -66,6 +67,63 @@ export default function SettingsScreen() {
     setConnected((c) => ({ ...c, [id]: false }));
   };
 
+  const onSync = async (id: CloudProviderId) => {
+    const adapter = adapters.find((a) => a.id === id);
+    if (!adapter || !adapter.syncRecipeBundle) return;
+
+    setSyncing((s) => ({ ...s, [id]: true }));
+
+    try {
+      const { listRecipes } = await import('../src/storage/recipeRepo');
+      const recipes = await listRecipes();
+
+      if (recipes.length === 0) {
+        Alert.alert('Nothing to sync', 'No recipes found to sync to Dropbox.');
+        setSyncing((s) => ({ ...s, [id]: false }));
+        return;
+      }
+
+      let synced = 0;
+      let failed = 0;
+
+      for (const recipe of recipes) {
+        try {
+          const recipeJson = JSON.stringify(recipe, null, 2);
+          const photos = (recipe.photos || []).map((p) => ({
+            fileName: p.localUri?.split('/').pop() || `photo-${Date.now()}.jpg`,
+            localUri: p.localUri || '',
+          })).filter(p => p.localUri); // Only include photos with valid localUri
+
+          await adapter.syncRecipeBundle(recipe.id, recipeJson, photos);
+          synced++;
+        } catch (error) {
+          console.error(`Failed to sync recipe ${recipe.id}:`, error);
+          failed++;
+        }
+      }
+
+      setSyncing((s) => ({ ...s, [id]: false }));
+
+      if (failed === 0) {
+        Alert.alert(
+          'Synced to Dropbox',
+          `Successfully synced ${synced} recipe${synced !== 1 ? 's' : ''} to your Dropbox!`
+        );
+      } else {
+        Alert.alert(
+          'Sync completed with errors',
+          `Synced ${synced} recipe${synced !== 1 ? 's' : ''}, ${failed} failed. Check your connection and try again.`
+        );
+      }
+    } catch (error) {
+      setSyncing((s) => ({ ...s, [id]: false }));
+      Alert.alert(
+        'Sync failed',
+        `Failed to sync recipes: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
       <Text style={styles.intro}>
@@ -95,6 +153,8 @@ export default function SettingsScreen() {
       {adapters.map((a) => {
         const enabled = enabledProviders.includes(a.id);
         const isOn = !!connected[a.id];
+        const isSyncing = !!syncing[a.id];
+        const canSync = isOn && a.syncRecipeBundle;
         return (
           <View key={a.id} style={StyleSheet.flatten([styles.card, !a.available && styles.cardDisabled])}>
             <View style={styles.cardHeader}>
@@ -125,6 +185,15 @@ export default function SettingsScreen() {
               >
                 <Text style={styles.btnText}>Connect</Text>
               </Pressable>
+              {canSync && (
+                <Pressable
+                  style={[styles.btn, isSyncing && styles.btnDisabled]}
+                  onPress={() => void onSync(a.id)}
+                  disabled={isSyncing}
+                >
+                  <Text style={styles.btnText}>{isSyncing ? 'Syncing...' : 'Sync Now'}</Text>
+                </Pressable>
+              )}
               <Pressable style={styles.btnSecondary} onPress={() => void onDisconnect(a.id)}>
                 <Text style={styles.btnSecondaryText}>Disconnect</Text>
               </Pressable>
@@ -186,6 +255,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
     borderRadius: 8,
+  },
+  btnDisabled: {
+    opacity: 0.5,
   },
   btnText: { color: colors.onPrimary, fontWeight: '600' },
   btnSecondary: {
