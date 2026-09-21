@@ -24,5 +24,5 @@ export function getAdapter(id: CloudProviderId): CloudStorageAdapter {
 }
 
 export function listAdapters(): CloudStorageAdapter[] {
-  return ALL_CLOUD_ADAPTERS;
+  return ALL_CLOUD_ADAPTERS.filter((a) => a.id === 'dropbox');
 }
