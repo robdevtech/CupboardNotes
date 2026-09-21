@@ -21,6 +21,8 @@ import { useRecipeStore } from '../../src/store/recipeStore';
 import { useCookingStore } from '../../src/store/cookingStore';
 import { useTheme, space, type ThemeColors } from '../../src/ui/theme';
 
+const EMPTY_SET = new Set<string>();
+
 export default function RecipeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -30,7 +32,9 @@ export default function RecipeDetailScreen() {
   const remove = useRecipeStore((s) => s.remove);
   const toggleStep = useCookingStore((s) => s.toggleStep);
   const resetRecipe = useCookingStore((s) => s.resetRecipe);
-  const checkedSteps = useCookingStore((s) => s.checkedSteps[id || ''] || new Set());
+  const checkedSteps = useCookingStore(
+    useCallback((s) => (id ? s.checkedSteps[id] : undefined) || EMPTY_SET, [id])
+  );
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [targetServings, setTargetServings] = useState(4);
   const [loading, setLoading] = useState(true);
