@@ -145,8 +145,8 @@ export default function RecipeDetailScreen() {
           <Pressable style={styles.action} onPress={() => void onShare()}>
             <Text style={styles.actionText}>Share</Text>
           </Pressable>
-          <Pressable style={[styles.action, styles.danger]} onPress={onDelete}>
-            <Text style={[styles.actionText, { color: colors.danger }]}>Delete</Text>
+          <Pressable style={StyleSheet.flatten([styles.action, styles.danger])} onPress={onDelete}>
+            <Text style={StyleSheet.flatten([styles.actionText, { color: colors.danger }])}>Delete</Text>
           </Pressable>
         </View>
 
