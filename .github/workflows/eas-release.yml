@@ -1,0 +1,107 @@
+name: EAS Build and GitHub Release
+
+# Trigger on version tags (e.g., v1.0.0, v1.1.0-beta)
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    name: Build APK and Attach to GitHub Release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Trigger EAS Build (APK for preview profile)
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          eas build --platform android --profile preview --non-interactive --no-wait
+          echo "EAS build triggered. Monitoring build status..."
+          
+          # Wait for build to complete (polls every 30 seconds)
+          BUILD_ID=$(eas build:list --platform android --limit 1 --json | jq -r '.[0].id')
+          echo "Build ID: $BUILD_ID"
+          
+          while true; do
+            BUILD_STATUS=$(eas build:view $BUILD_ID --json | jq -r '.status')
+            echo "Current build status: $BUILD_STATUS"
+            
+            if [ "$BUILD_STATUS" = "finished" ]; then
+              echo "Build completed successfully!"
+              break
+            elif [ "$BUILD_STATUS" = "errored" ] || [ "$BUILD_STATUS" = "canceled" ]; then
+              echo "Build failed with status: $BUILD_STATUS"
+              exit 1
+            fi
+            
+            sleep 30
+          done
+
+      - name: Download APK from EAS
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          BUILD_ID=$(eas build:list --platform android --limit 1 --json | jq -r '.[0].id')
+          APK_URL=$(eas build:view $BUILD_ID --json | jq -r '.artifacts.buildUrl')
+          echo "Downloading APK from: $APK_URL"
+          
+          # Download the APK
+          curl -L -o cupboard-notes.apk "$APK_URL"
+          
+          # Verify the file was downloaded
+          if [ ! -f cupboard-notes.apk ]; then
+            echo "Failed to download APK"
+            exit 1
+          fi
+          
+          echo "APK downloaded successfully: $(ls -lh cupboard-notes.apk)"
+
+      - name: Get release tag
+        id: get_tag
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: cupboard-notes.apk
+          name: Release ${{ steps.get_tag.outputs.tag }}
+          body: |
+            ## Cupboard Notes ${{ steps.get_tag.outputs.tag }}
+            
+            ### Download and Install
+            
+            **Android APK** (for sideload/testing):
+            - Download `cupboard-notes.apk` below
+            - Enable "Install from Unknown Sources" on your Android device
+            - Open the APK file to install
+            
+            ### What's New
+            
+            <!-- Add your release notes here -->
+            
+            ---
+            
+            **Note**: This APK is built with EAS Build and signed with the app's release keystore.
+            Dropbox cloud sync requires the `EXPO_PUBLIC_DROPBOX_APP_KEY` to be set during build.
+            
+            For more information, see the [README](https://github.com/robdevtech/CupboardNotes/blob/main/README.md#releases--friend-testing).
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
