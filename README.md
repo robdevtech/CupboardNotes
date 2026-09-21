@@ -137,6 +137,8 @@ In the **Settings** tab:
 
 ### 5. Configure the App
 
+**Option A: Using app.json (recommended for testing)**
+
 Add your Dropbox app key to `app.json`:
 
 ```json
@@ -149,11 +151,21 @@ Add your Dropbox app key to `app.json`:
 }
 ```
 
-Or set it as an environment variable:
+**Option B: Using environment variable (recommended for production)**
+
+Create a `.env` file in the project root:
 
 ```bash
-export EXPO_PUBLIC_DROPBOX_APP_KEY=your-app-key-here
+EXPO_PUBLIC_DROPBOX_APP_KEY=your-app-key-here
 ```
+
+Add `.env` to your `.gitignore` to keep the key secure:
+
+```bash
+echo ".env" >> .gitignore
+```
+
+The app will check for `EXPO_PUBLIC_DROPBOX_APP_KEY` environment variable first, then fall back to `app.json` configuration.
 
 ### 6. Test in Expo Go
 
@@ -187,8 +199,9 @@ export EXPO_PUBLIC_DROPBOX_APP_KEY=your-app-key-here
 ### Troubleshooting
 
 **"DROPBOX_APP_KEY not configured" error:**
-- Make sure you've added the app key to `app.json` under `expo.extra.DROPBOX_APP_KEY`
-- Or set `EXPO_PUBLIC_DROPBOX_APP_KEY` environment variable
+- Make sure you've added the app key using one of these methods:
+  - Add to `app.json` under `expo.extra.DROPBOX_APP_KEY`, OR
+  - Create a `.env` file with `EXPO_PUBLIC_DROPBOX_APP_KEY=your-key`
 - Restart the Expo dev server after changes
 
 **OAuth redirect fails:**

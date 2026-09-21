@@ -20,7 +20,8 @@ import { saveSecret, readSecret, deleteSecret } from '../../storage/secureStoreS
 
 WebBrowser.maybeCompleteAuthSession();
 
-const DROPBOX_APP_KEY = Constants.expoConfig?.extra?.DROPBOX_APP_KEY || '';
+const DROPBOX_APP_KEY =
+  process.env.EXPO_PUBLIC_DROPBOX_APP_KEY || Constants.expoConfig?.extra?.DROPBOX_APP_KEY || '';
 const REDIRECT_URI = AuthSession.makeRedirectUri({
   scheme: 'cupboardnotes',
   path: 'auth',
