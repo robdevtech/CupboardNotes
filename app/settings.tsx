@@ -76,10 +76,10 @@ export default function SettingsScreen() {
           {(['system', 'light', 'dark'] as ThemeMode[]).map((mode) => (
             <Pressable
               key={mode}
-              style={[styles.themeOption, themePreference === mode && styles.themeOptionSelected]}
+              style={StyleSheet.flatten([styles.themeOption, themePreference === mode && styles.themeOptionSelected])}
               onPress={() => void setThemePreference(mode)}
             >
-              <Text style={[styles.themeOptionText, themePreference === mode && styles.themeOptionTextSelected]}>
+              <Text style={StyleSheet.flatten([styles.themeOptionText, themePreference === mode && styles.themeOptionTextSelected])}>
                 {mode === 'system' ? 'System' : mode === 'light' ? 'Light' : 'Dark'}
               </Text>
             </Pressable>
@@ -91,7 +91,7 @@ export default function SettingsScreen() {
         const enabled = enabledProviders.includes(a.id);
         const isOn = !!connected[a.id];
         return (
-          <View key={a.id} style={[styles.card, !a.available && styles.cardDisabled]}>
+          <View key={a.id} style={StyleSheet.flatten([styles.card, !a.available && styles.cardDisabled])}>
             <View style={styles.cardHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{a.displayName}</Text>

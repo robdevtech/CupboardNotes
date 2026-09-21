@@ -253,7 +253,7 @@ function Field({
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
-        style={[styles.input, props.multiline && styles.multiline, tall && styles.tall]}
+        style={StyleSheet.flatten([styles.input, props.multiline && styles.multiline, tall && styles.tall])}
         placeholderTextColor={colors.textMuted}
         {...props}
       />

@@ -110,7 +110,7 @@ export default function ImportScreen() {
         placeholderTextColor={colors.textMuted}
       />
       <Pressable
-        style={[styles.btn, busy && styles.btnDisabled]}
+        style={StyleSheet.flatten([styles.btn, busy && styles.btnDisabled])}
         onPress={() => void onImport()}
         disabled={busy || !url.trim()}
       >
@@ -131,14 +131,14 @@ export default function ImportScreen() {
           <TextInput style={styles.input} value={pasteTitle} onChangeText={setPasteTitle} />
           <Text style={styles.label}>Ingredients (one per line)</Text>
           <TextInput
-            style={[styles.input, styles.tall]}
+            style={StyleSheet.flatten([styles.input, styles.tall])}
             value={pasteIngredients}
             onChangeText={setPasteIngredients}
             multiline
           />
           <Text style={styles.label}>Steps (one per line)</Text>
           <TextInput
-            style={[styles.input, styles.tall]}
+            style={StyleSheet.flatten([styles.input, styles.tall])}
             value={pasteSteps}
             onChangeText={setPasteSteps}
             multiline
