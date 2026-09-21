@@ -34,7 +34,7 @@ export default function RecipeListScreen() {
         style={styles.card}
         onPress={() => router.push(`/recipe/${item.id}`)}
       >
-        {thumb ? <Image source={{ uri: thumb }} style={styles.thumb} /> : <View style={[styles.thumb, styles.thumbEmpty]} />}
+        {thumb ? <Image source={{ uri: thumb }} style={styles.thumb} /> : <View style={StyleSheet.flatten([styles.thumb, styles.thumbEmpty])} />}
         <View style={styles.cardBody}>
           <Text style={styles.title} numberOfLines={2}>
             {item.title}
@@ -61,8 +61,8 @@ export default function RecipeListScreen() {
           </Pressable>
         </Link>
         <Link href={{ pathname: '/recipe/edit' }} asChild>
-          <Pressable style={[styles.toolBtn, styles.primaryBtn]}>
-            <Text style={[styles.toolBtnText, styles.primaryBtnText]}>New recipe</Text>
+          <Pressable style={StyleSheet.flatten([styles.toolBtn, styles.primaryBtn])}>
+            <Text style={StyleSheet.flatten([styles.toolBtnText, styles.primaryBtnText])}>New recipe</Text>
           </Pressable>
         </Link>
         <Link href="/settings" asChild>
