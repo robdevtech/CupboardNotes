@@ -1,0 +1,111 @@
+name: EAS Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Trigger EAS Build
+        id: eas-build
+        run: |
+          BUILD_ID=$(eas build --platform android --profile preview --non-interactive --no-wait --json | jq -r '.[0].id')
+          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
+          echo "Triggered EAS build: $BUILD_ID"
+
+      - name: Wait for EAS Build
+        run: |
+          echo "Waiting for build ${{ steps.eas-build.outputs.build_id }} to complete..."
+          
+          MAX_WAIT=3600
+          ELAPSED=0
+          INTERVAL=30
+          
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            STATUS=$(eas build:view ${{ steps.eas-build.outputs.build_id }} --json | jq -r '.status')
+            echo "Build status: $STATUS (waited ${ELAPSED}s)"
+            
+            if [ "$STATUS" = "finished" ]; then
+              echo "Build completed successfully!"
+              exit 0
+            elif [ "$STATUS" = "errored" ] || [ "$STATUS" = "canceled" ]; then
+              echo "Build failed with status: $STATUS"
+              exit 1
+            fi
+            
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+          
+          echo "Build timed out after ${MAX_WAIT}s"
+          exit 1
+
+      - name: Download APK
+        id: download
+        run: |
+          BUILD_URL=$(eas build:view ${{ steps.eas-build.outputs.build_id }} --json | jq -r '.artifacts.buildUrl')
+          
+          if [ -z "$BUILD_URL" ] || [ "$BUILD_URL" = "null" ]; then
+            echo "No build URL found"
+            exit 1
+          fi
+          
+          echo "Downloading APK from: $BUILD_URL"
+          wget -O cupboard-notes.apk "$BUILD_URL"
+          
+          VERSION=${GITHUB_REF_NAME#v}
+          APK_NAME="cupboard-notes-v${VERSION}.apk"
+          mv cupboard-notes.apk "$APK_NAME"
+          echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.download.outputs.apk_name }}
+          body: |
+            ## Cupboard Notes ${{ github.ref_name }}
+            
+            ### Android APK
+            Download the APK below and install on your Android device.
+            
+            **Important**: Enable "Install from unknown sources" in your device settings before installing.
+            
+            ### What's included
+            - Offline-first recipe storage with SQLite
+            - Dropbox cloud sync (requires Dropbox app key configuration)
+            - Light/dark themes
+            - Recipe import from URLs
+            - Photo support for recipes
+            
+            ### Notes
+            - This APK is signed for testing/sideloading
+            - Built with Expo SDK 57 and EAS Build
+            - Package: `com.cupboardnotes.app`
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

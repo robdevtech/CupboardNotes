@@ -1,0 +1,40 @@
+{
+  "cli": {
+    "version": ">= 13.2.1",
+    "requireCommit": true,
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "base": {
+      "node": "22.13.0",
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_DROPBOX_APP_KEY": ""
+      }
+    },
+    "preview": {
+      "extends": "base",
+      "android": {
+        "buildType": "apk",
+        "image": "sdk-57"
+      },
+      "ios": {
+        "image": "sdk-57"
+      }
+    },
+    "production": {
+      "extends": "base",
+      "distribution": "store",
+      "android": {
+        "buildType": "app-bundle",
+        "image": "sdk-57"
+      },
+      "ios": {
+        "image": "sdk-57"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
