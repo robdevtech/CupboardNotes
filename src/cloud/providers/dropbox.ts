@@ -187,15 +187,17 @@ export const dropboxAdapter: CloudStorageAdapter = {
     const codeVerifier = await generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
 
-    const authUrl = `${AUTH_ENDPOINT}?${new URLSearchParams({
+    // Omit `scope` so Dropbox grants all permissions enabled on the app.
+    // Requesting scopes that aren't enabled causes: "No scope requested can be granted for this app."
+    const authParams: Record<string, string> = {
       client_id: DROPBOX_APP_KEY,
       response_type: 'code',
       redirect_uri: REDIRECT_URI,
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
       token_access_type: 'offline',
-      scope: SCOPES.join(' '),
-    }).toString()}`;
+    };
+    const authUrl = `${AUTH_ENDPOINT}?${new URLSearchParams(authParams).toString()}`;
 
     const result = await WebBrowser.openAuthSessionAsync(authUrl, REDIRECT_URI);
 
