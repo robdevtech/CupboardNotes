@@ -75,13 +75,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // 3. Listen to Appearance changes to update when system theme changes
   const [systemScheme, setSystemScheme] = useState<'light' | 'dark' | null>(() => {
     // Initialize with hookScheme if available, otherwise use Appearance API
-    return hookScheme ?? Appearance.getColorScheme();
+    if (hookScheme === 'dark' || hookScheme === 'light') return hookScheme;
+    const appearanceScheme = Appearance.getColorScheme();
+    return appearanceScheme === 'dark' || appearanceScheme === 'light' ? appearanceScheme : null;
   });
 
   // Update systemScheme when hookScheme changes (normal React Native path)
   useEffect(() => {
-    if (hookScheme !== null) {
+    if (hookScheme === 'dark' || hookScheme === 'light') {
       setSystemScheme(hookScheme);
+    } else if (hookScheme === null) {
+      setSystemScheme(null);
     }
   }, [hookScheme]);
 
@@ -89,7 +93,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // This ensures we catch changes even if useColorScheme() doesn't update
   useEffect(() => {
     const subscription = Appearance.addChangeListener(({ colorScheme }) => {
-      setSystemScheme(colorScheme);
+      if (colorScheme === 'dark' || colorScheme === 'light') {
+        setSystemScheme(colorScheme);
+      } else {
+        setSystemScheme(null);
+      }
     });
     return () => subscription.remove();
   }, []);

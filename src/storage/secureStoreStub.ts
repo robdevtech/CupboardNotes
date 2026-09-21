@@ -1,10 +1,10 @@
 /**
- * Thin wrapper around expo-secure-store for future OAuth tokens.
- * Tokens are never logged. Stubbed usage until cloud adapters go live.
+ * Secure storage wrapper for OAuth tokens.
+ * Tokens are never logged.
  */
 import * as SecureStore from 'expo-secure-store';
 
-const PREFIX = 'rk.token.';
+const PREFIX = 'cupboard.token.';
 
 export async function saveSecret(key: string, value: string): Promise<void> {
   await SecureStore.setItemAsync(PREFIX + key, value);
