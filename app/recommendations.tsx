@@ -52,19 +52,19 @@ export default function RecommendationsScreen() {
   const loadFeed = async () => {
     setLoading(true);
     try {
-      // Try to load from remote first, fallback to local
+      // Prefer local bundled feed (always up to date with the branch)
       let feedData: RecommendationsFeed;
       
       try {
+        feedData = require('../recommendations.json');
+      } catch (e) {
+        // Fallback to remote if bundled file somehow missing
         const response = await fetch(FEED_URL);
         if (response.ok) {
           feedData = await response.json();
         } else {
           throw new Error('Failed to fetch');
         }
-      } catch (e) {
-        // Fallback to local bundled feed
-        feedData = require('../recommendations.json');
       }
       
       setFeed(feedData);
