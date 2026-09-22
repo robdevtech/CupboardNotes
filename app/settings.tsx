@@ -130,7 +130,7 @@ export default function SettingsScreen() {
     <ScrollView contentContainerStyle={styles.scroll}>
       <Text style={styles.intro}>
         Offline SQLite is the source of truth. Storage sync is optional and additive. Enable Local
-        Folder to keep recipes in your device's Documents directory, or Dropbox (OAuth stub) for
+        Folder to keep recipes in your device's Documents directory, or Dropbox for
         cloud storage. Multi-store sync uses last-write-wins merge. No managed server.
       </Text>
 
