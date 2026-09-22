@@ -2,78 +2,136 @@
  * Local filesystem adapter.
  *
  * Storage plan:
- * - Android: SAF (Storage Access Framework) for user-selected folder
- * - iOS: Document picker or app Documents directory
- * - Stores recipes as JSON bundles in /Cupboard Notes/{recipeId}/recipe.json + photos/*
+ * - Uses app Documents directory for recipe storage (Expo Go compatible)
+ * - Stores recipes as JSON bundles in /CupboardNotes/{recipeId}/recipe.json + photos/*
  * - Participates in multi-store sync with last-write-wins merge strategy
- * - Tokens/folder paths stored in expo-secure-store
+ * - Connection state persisted in expo-secure-store
+ * 
+ * Note: Full SAF (Storage Access Framework) folder picker requires custom dev client.
+ * This implementation uses app-owned storage that works in Expo Go and production builds.
  */
 
 import * as FileSystem from 'expo-file-system/legacy';
+import * as SecureStore from 'expo-secure-store';
 import type {
   CloudAuthSession,
   CloudFileInfo,
   CloudStorageAdapter,
 } from '../CloudStorageAdapter';
 
-const STORAGE_KEY = 'local_filesystem_path';
+const STORAGE_KEY = 'local_filesystem_connected';
+const PATH_KEY = 'local_filesystem_path';
 
+/**
+ * Get the stored path (always returns app documents path for now).
+ * In a custom dev client, this could store user-selected SAF URIs.
+ */
 async function getStoredPath(): Promise<string | null> {
-  // For now, use app's document directory as default
-  // In production, this would use SecureStore to persist user-selected path
-  return null;
+  try {
+    const path = await SecureStore.getItemAsync(PATH_KEY);
+    return path;
+  } catch (e) {
+    return null;
+  }
 }
 
 async function setStoredPath(path: string): Promise<void> {
-  // Store selected path in SecureStore
-  // For now, we'll use app's document directory
+  try {
+    await SecureStore.setItemAsync(PATH_KEY, path);
+  } catch (e) {
+    console.warn('Failed to store path:', e);
+  }
+}
+
+async function isStorageConnected(): Promise<boolean> {
+  try {
+    const connected = await SecureStore.getItemAsync(STORAGE_KEY);
+    return connected === 'true';
+  } catch (e) {
+    return false;
+  }
+}
+
+async function setStorageConnected(connected: boolean): Promise<void> {
+  try {
+    if (connected) {
+      await SecureStore.setItemAsync(STORAGE_KEY, 'true');
+    } else {
+      await SecureStore.deleteItemAsync(STORAGE_KEY);
+    }
+  } catch (e) {
+    console.warn('Failed to store connection state:', e);
+  }
 }
 
 function getAppDocumentsPath(): string {
-  // Use app's document directory
   return `${FileSystem.documentDirectory}CupboardNotes/`;
+}
+
+/**
+ * Get a display-friendly version of the storage path for showing in UI.
+ */
+function getDisplayPath(): string {
+  const path = getAppDocumentsPath();
+  // Simplify for display
+  if (path.includes('ExponentExperienceData')) {
+    return '...ExponentExperienceData/.../CupboardNotes/';
+  }
+  return path.replace(FileSystem.documentDirectory || '', 'Documents/') + 'CupboardNotes/';
 }
 
 export const localFilesystemAdapter: CloudStorageAdapter = {
   id: 'local' as any, // Extended type
   displayName: 'Local Folder',
   authNotes:
-    'Store recipes in a local folder on your device. Syncs across connected storage providers.',
+    `Uses app Documents directory at: ${getDisplayPath()}\n\n` +
+    'Recipes stored locally on this device. Participates in multi-store sync. ' +
+    'Full custom folder picker requires custom dev client (not available in Expo Go).',
   available: true,
 
   async isConnected() {
-    const path = await getStoredPath();
-    return path !== null || true; // Always available with app Documents fallback
+    return await isStorageConnected();
   },
 
   async getSession() {
-    const isConnected = await this.isConnected();
-    if (!isConnected) return null;
+    const connected = await isStorageConnected();
+    if (!connected) return null;
+    
+    const path = await getStoredPath() || getAppDocumentsPath();
     
     return {
       providerId: 'local' as any,
-      accountLabel: 'Local Storage',
+      accountLabel: `Local: ${getDisplayPath()}`,
       connectedAt: new Date().toISOString(),
     };
   },
 
   async connect(): Promise<CloudAuthSession> {
-    // On Android/iOS, could use DocumentPicker to select a folder
-    // For now, we'll use the app's document directory
+    // Create the app's CupboardNotes directory
     const path = getAppDocumentsPath();
-    await FileSystem.makeDirectoryAsync(path, { intermediates: true });
-    await setStoredPath(path);
     
-    return {
-      providerId: 'local' as any,
-      accountLabel: 'Local Storage',
-      connectedAt: new Date().toISOString(),
-    };
+    try {
+      // Ensure directory exists
+      await FileSystem.makeDirectoryAsync(path, { intermediates: true });
+      
+      // Persist connection state and path
+      await setStorageConnected(true);
+      await setStoredPath(path);
+      
+      return {
+        providerId: 'local' as any,
+        accountLabel: `Local: ${getDisplayPath()}`,
+        connectedAt: new Date().toISOString(),
+      };
+    } catch (e) {
+      throw new Error(`Failed to set up local storage: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
   },
 
   async disconnect() {
-    // Clear stored path (but don't delete files)
-    await setStoredPath('');
+    // Clear connection state (but don't delete files)
+    await setStorageConnected(false);
+    await SecureStore.deleteItemAsync(PATH_KEY).catch(() => {});
   },
 
   async ensureAppFolder() {

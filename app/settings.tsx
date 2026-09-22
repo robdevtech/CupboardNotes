@@ -41,13 +41,21 @@ export default function SettingsScreen() {
       return;
     }
     try {
-      await adapter.connect();
+      const session = await adapter.connect();
       setConnected((c) => ({ ...c, [id]: true }));
       if (!enabledProviders.includes(id)) toggleProvider(id);
-      Alert.alert(
-        'Connected (stub)',
-        `${adapter.displayName}: Milestone 1 uses a stub session. Real OAuth lands in Milestone 2.\n\n${adapter.authNotes}`
-      );
+      
+      if (id === 'local') {
+        Alert.alert(
+          'Local Storage Connected',
+          `Recipes will be stored in your app's Documents directory.\n\nLocation: ${session.accountLabel}\n\nThis folder syncs with other connected storage providers using last-write-wins merge.`
+        );
+      } else {
+        Alert.alert(
+          'Connected (stub)',
+          `${adapter.displayName}: Milestone 1 uses a stub session. Real OAuth lands in Milestone 2.\n\n${adapter.authNotes}`
+        );
+      }
     } catch (e) {
       Alert.alert(
         adapter.displayName,
@@ -129,6 +137,7 @@ export default function SettingsScreen() {
       {adapters.map((a) => {
         const enabled = enabledProviders.includes(a.id);
         const isOn = !!connected[a.id];
+        const isLocal = a.id === 'local';
         return (
           <View key={a.id} style={StyleSheet.flatten([styles.card, !a.available && styles.cardDisabled])}>
             <View style={styles.cardHeader}>
@@ -138,7 +147,7 @@ export default function SettingsScreen() {
                   {!a.available
                     ? 'Unavailable on this platform'
                     : isOn
-                      ? 'Stub-connected'
+                      ? isLocal ? 'Connected' : 'Stub-connected'
                       : 'Not connected'}
                 </Text>
               </View>
@@ -155,11 +164,15 @@ export default function SettingsScreen() {
               <Pressable
                 style={styles.btn}
                 onPress={() => void onConnect(a.id)}
-                disabled={!a.available}
+                disabled={!a.available || isOn}
               >
-                <Text style={styles.btnText}>Connect</Text>
+                <Text style={styles.btnText}>{isOn ? 'Connected' : 'Connect'}</Text>
               </Pressable>
-              <Pressable style={styles.btnSecondary} onPress={() => void onDisconnect(a.id)}>
+              <Pressable 
+                style={styles.btnSecondary} 
+                onPress={() => void onDisconnect(a.id)}
+                disabled={!isOn}
+              >
                 <Text style={styles.btnSecondaryText}>Disconnect</Text>
               </Pressable>
             </View>
