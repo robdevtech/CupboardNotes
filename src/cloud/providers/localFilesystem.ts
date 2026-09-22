@@ -9,8 +9,7 @@
  * - Tokens/folder paths stored in expo-secure-store
  */
 
-import * as FileSystem from 'expo-file-system';
-import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import type {
   CloudAuthSession,
   CloudFileInfo,
