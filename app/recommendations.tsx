@@ -10,12 +10,6 @@ import {
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { useTheme, space, type ThemeColors } from '../src/ui/theme';
-import { importRecipeFromUrl } from '../src/parse/htmlFetch';
-import { parseIngredientLine } from '../src/parse/ingredientParse';
-import { newId } from '../src/domain/ids';
-import { photosFromImportUrls } from '../src/storage/photos';
-import * as repo from '../src/storage/recipeRepo';
-import { useRecipeStore } from '../src/store/recipeStore';
 
 interface Recommendation {
   id: string;
@@ -40,10 +34,8 @@ export default function RecommendationsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const refresh = useRecipeStore((s) => s.refresh);
   const [feed, setFeed] = useState<RecommendationsFeed | null>(null);
   const [loading, setLoading] = useState(true);
-  const [importing, setImporting] = useState<string | null>(null);
 
   useEffect(() => {
     loadFeed();
@@ -75,39 +67,19 @@ export default function RecommendationsScreen() {
     }
   };
 
-  const onImportRecipe = async (rec: Recommendation) => {
-    setImporting(rec.id);
-    try {
-      const data = await importRecipeFromUrl(rec.url);
-      const photos = await photosFromImportUrls(data.imageUrls);
-      const created = await repo.createRecipe({
-        title: data.title,
-        description: data.description,
-        notes: null,
-        servings: data.servings && data.servings > 0 ? data.servings : 4,
-        ingredients: data.ingredients.map((line) => parseIngredientLine(line)),
-        steps: data.instructions.map((text, order) => ({ id: newId(), text, order })),
-        photos,
-        sourceUrl: data.sourceUrl ?? rec.url,
-        tags: rec.tags,
-      });
-      await refresh();
-      Alert.alert('Recipe imported!', `"${created.title}" added to your collection.`, [
-        { text: 'View', onPress: () => router.push(`/recipe/${created.id}`) },
-        { text: 'OK' },
-      ]);
-    } catch (e) {
-      Alert.alert(
-        'Import failed',
-        `${rec.title}\n\n${e instanceof Error ? e.message : 'Could not import this recipe.'}\n\nTry importing manually via URL.`
-      );
-    } finally {
-      setImporting(null);
-    }
+  const onOpenPreview = (item: Recommendation) => {
+    router.push({
+      pathname: '/recommendations/preview',
+      params: {
+        url: item.url,
+        title: item.title,
+        tags: item.tags,
+      },
+    });
   };
 
   const renderItem = ({ item }: { item: Recommendation }) => (
-    <View style={styles.card}>
+    <Pressable style={styles.card} onPress={() => onOpenPreview(item)}>
       <View style={styles.cardHeader}>
         <Text style={styles.title}>{item.title}</Text>
         <View style={styles.categoryBadge}>
@@ -124,18 +96,10 @@ export default function RecommendationsScreen() {
           ))}
         </View>
       )}
-      <Pressable
-        style={StyleSheet.flatten([styles.importBtn, importing === item.id && styles.importBtnDisabled])}
-        onPress={() => void onImportRecipe(item)}
-        disabled={importing !== null}
-      >
-        {importing === item.id ? (
-          <ActivityIndicator color={colors.onPrimary} />
-        ) : (
-          <Text style={styles.importBtnText}>Import Recipe</Text>
-        )}
-      </Pressable>
-    </View>
+      <View style={styles.cardFooter}>
+        <Text style={styles.tapHint}>Tap to preview</Text>
+      </View>
+    </Pressable>
   );
 
   return (
@@ -214,16 +178,18 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: colors.primarySoft,
     },
     tagText: { fontSize: 11, color: colors.primary, fontWeight: '600' },
-    importBtn: {
-      backgroundColor: colors.primary,
-      paddingVertical: space.sm,
-      borderRadius: 8,
-      alignItems: 'center',
-      minHeight: 40,
-      justifyContent: 'center',
+    cardFooter: {
+      paddingTop: space.sm,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      marginTop: space.sm,
     },
-    importBtnDisabled: { opacity: 0.6 },
-    importBtnText: { fontSize: 15, fontWeight: '700', color: colors.onPrimary },
+    tapHint: {
+      fontSize: 13,
+      color: colors.primary,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
     empty: {
       flex: 1,
       alignItems: 'center',
