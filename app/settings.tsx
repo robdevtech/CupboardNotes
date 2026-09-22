@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, Switch, Alert, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView, Alert, Platform, ActivityIndicator } from 'react-native';
 import { listAdapters } from '../src/cloud/registry';
 import { syncAllStores } from '../src/cloud/syncManager';
 import type { CloudProviderId } from '../src/cloud/CloudStorageAdapter';
@@ -10,7 +10,7 @@ export default function SettingsScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const adapters = listAdapters();
-  const { enabledProviders, toggleProvider, themePreference, setThemePreference } = useSettingsStore();
+  const { themePreference, setThemePreference } = useSettingsStore();
   const [connected, setConnected] = useState<Record<string, boolean>>({});
   const [sessions, setSessions] = useState<Record<string, { accountLabel?: string } | null>>({});
   const [syncing, setSyncing] = useState(false);
@@ -56,7 +56,6 @@ export default function SettingsScreen() {
     try {
       const session = await adapter.connect();
       await loadConnectionStates(); // Refresh all states
-      if (!enabledProviders.includes(id)) toggleProvider(id);
       
       if (id === 'local') {
         Alert.alert(
@@ -129,9 +128,9 @@ export default function SettingsScreen() {
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
       <Text style={styles.intro}>
-        Offline SQLite is the source of truth. Storage sync is optional and additive. Enable Local
+        Offline SQLite is the source of truth. Storage sync is optional and additive. Connect Local
         Folder to keep recipes in your device's Documents directory, or Dropbox for
-        cloud storage. Multi-store sync uses last-write-wins merge. No managed server.
+        cloud storage. Connected providers sync automatically. Multi-store sync uses last-write-wins merge. No managed server.
       </Text>
 
       {Object.values(connected).some(Boolean) && (
@@ -167,30 +166,20 @@ export default function SettingsScreen() {
       </View>
 
       {adapters.map((a) => {
-        const enabled = enabledProviders.includes(a.id);
         const isOn = !!connected[a.id];
         const session = sessions[a.id];
         const isLocal = a.id === 'local';
         return (
           <View key={a.id} style={StyleSheet.flatten([styles.card, !a.available && styles.cardDisabled])}>
             <View style={styles.cardHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.name}>{a.displayName}</Text>
-                <Text style={styles.status}>
-                  {!a.available
-                    ? 'Unavailable on this platform'
-                    : isOn
-                      ? 'Connected'
-                      : 'Not connected'}
-                </Text>
-              </View>
-              <Switch
-                value={enabled}
-                disabled={!a.available}
-                trackColor={{ false: colors.chip, true: colors.primarySoft }}
-                thumbColor={enabled ? colors.primary : colors.textMuted}
-                onValueChange={() => toggleProvider(a.id)}
-              />
+              <Text style={styles.name}>{a.displayName}</Text>
+              <Text style={styles.status}>
+                {!a.available
+                  ? 'Unavailable on this platform'
+                  : isOn
+                    ? 'Connected'
+                    : 'Not connected'}
+              </Text>
             </View>
             
             {isOn && session?.accountLabel ? (
@@ -232,7 +221,7 @@ export default function SettingsScreen() {
 
       <Text style={styles.footer}>
         Recipe bundles are stored as /Cupboard Notes/&#123;recipeId&#125;/recipe.json + photos/* in each
-        enabled store. Multi-store sync merges by newest updatedAt (last-write-wins). Other cloud
+        connected store. Multi-store sync merges by newest updatedAt (last-write-wins). Other cloud
         providers (Google Drive, iCloud, OneDrive, Box) are stubbed for future OAuth implementation.
       </Text>
     </ScrollView>
@@ -274,7 +263,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: space.md,
   },
   cardDisabled: { opacity: 0.7 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  cardHeader: { marginBottom: space.sm },
   name: { fontSize: 16, fontWeight: '700', color: colors.text },
   status: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
   notes: { fontSize: 12, color: colors.textMuted, marginVertical: space.sm, lineHeight: 18 },
