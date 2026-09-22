@@ -63,10 +63,15 @@ export default function SettingsScreen() {
           'Local Storage Connected',
           `Recipes will be stored in your app's Documents directory.\n\nLocation: ${session.accountLabel}\n\nThis folder syncs with other connected storage providers using last-write-wins merge.`
         );
+      } else if (id === 'dropbox') {
+        Alert.alert(
+          'Dropbox Connected',
+          `Successfully connected to Dropbox as ${session.accountLabel}.\n\nRecipes will sync to /Cupboard Notes folder in your Dropbox using last-write-wins merge.`
+        );
       } else {
         Alert.alert(
           'Connected (stub)',
-          `${adapter.displayName}: Milestone 1 uses a stub session. Real OAuth lands in Milestone 2.\n\n${adapter.authNotes}`
+          `${adapter.displayName}: OAuth not yet implemented.\n\n${adapter.authNotes}`
         );
       }
     } catch (e) {
@@ -175,7 +180,7 @@ export default function SettingsScreen() {
                   {!a.available
                     ? 'Unavailable on this platform'
                     : isOn
-                      ? isLocal ? 'Connected' : 'Connected (stub)'
+                      ? 'Connected'
                       : 'Not connected'}
                 </Text>
               </View>
