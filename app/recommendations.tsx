@@ -99,7 +99,7 @@ export default function RecommendationsScreen() {
     } catch (e) {
       Alert.alert(
         'Import failed',
-        e instanceof Error ? e.message : 'Could not import this recipe. Try importing manually via URL.'
+        `${rec.title}\n\n${e instanceof Error ? e.message : 'Could not import this recipe.'}\n\nTry importing manually via URL.`
       );
     } finally {
       setImporting(null);

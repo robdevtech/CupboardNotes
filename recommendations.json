@@ -1,21 +1,21 @@
 {
   "version": "cupboard-notes/recommendations/v1",
-  "updatedAt": "2026-09-21T04:30:00Z",
+  "updatedAt": "2026-09-22T03:35:00Z",
   "season": "Fall 2026",
   "recommendations": [
     {
       "id": "rec-1",
-      "title": "Classic Chocolate Chip Cookies",
+      "title": "Perfect Chocolate Chip Cookies",
       "description": "Crispy edges, chewy center. The definitive chocolate chip cookie recipe.",
-      "url": "https://www.seriouseats.com/the-food-lab-best-chocolate-chip-cookie-recipe",
+      "url": "https://tasty.co/recipe/perfect-chocolate-chip-cookies",
       "category": "dessert",
       "tags": ["dessert", "party"]
     },
     {
       "id": "rec-2",
-      "title": "Perfect Roast Chicken",
+      "title": "Classic Roast Chicken",
       "description": "Golden skin, juicy meat. A foolproof weeknight dinner classic.",
-      "url": "https://www.seriouseats.com/the-best-roast-chicken-recipe",
+      "url": "https://tasty.co/recipe/roast-chicken",
       "category": "dinner",
       "tags": ["dinner"]
     },
@@ -23,15 +23,15 @@
       "id": "rec-3",
       "title": "Overnight Oats",
       "description": "Prep tonight, grab breakfast tomorrow. Customizable and healthy.",
-      "url": "https://www.budgetbytes.com/basic-overnight-oats/",
+      "url": "https://www.food.com/recipe/overnight-oats-534459",
       "category": "breakfast",
       "tags": ["breakfast"]
     },
     {
       "id": "rec-4",
-      "title": "Simple Italian Pasta",
+      "title": "Simple Garlic Pasta",
       "description": "Five ingredients, 20 minutes. Perfect for busy weeknights.",
-      "url": "https://www.budgetbytes.com/simple-italian-pasta/",
+      "url": "https://www.food.com/recipe/simple-garlic-pasta-208217",
       "category": "dinner",
       "tags": ["dinner", "lunch"]
     }
