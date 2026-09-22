@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, Switch, Alert, Platform, ActivityIndicator } from 'react-native';
 import { listAdapters } from '../src/cloud/registry';
 import { syncAllStores } from '../src/cloud/syncManager';
@@ -12,21 +12,34 @@ export default function SettingsScreen() {
   const adapters = listAdapters();
   const { enabledProviders, toggleProvider, themePreference, setThemePreference } = useSettingsStore();
   const [connected, setConnected] = useState<Record<string, boolean>>({});
+  const [sessions, setSessions] = useState<Record<string, { accountLabel?: string } | null>>({});
   const [syncing, setSyncing] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      const map: Record<string, boolean> = {};
-      for (const a of adapters) {
-        try {
-          map[a.id] = await a.isConnected();
-        } catch {
-          map[a.id] = false;
+  const loadConnectionStates = useCallback(async () => {
+    const connMap: Record<string, boolean> = {};
+    const sessMap: Record<string, { accountLabel?: string } | null> = {};
+    for (const a of adapters) {
+      try {
+        const isConn = await a.isConnected();
+        connMap[a.id] = isConn;
+        if (isConn) {
+          const session = await a.getSession();
+          sessMap[a.id] = session;
+        } else {
+          sessMap[a.id] = null;
         }
+      } catch {
+        connMap[a.id] = false;
+        sessMap[a.id] = null;
       }
-      setConnected(map);
-    })();
+    }
+    setConnected(connMap);
+    setSessions(sessMap);
   }, [adapters]);
+
+  useEffect(() => {
+    void loadConnectionStates();
+  }, [loadConnectionStates]);
 
   const onConnect = async (id: CloudProviderId) => {
     const adapter = adapters.find((a) => a.id === id);
@@ -42,7 +55,7 @@ export default function SettingsScreen() {
     }
     try {
       const session = await adapter.connect();
-      setConnected((c) => ({ ...c, [id]: true }));
+      await loadConnectionStates(); // Refresh all states
       if (!enabledProviders.includes(id)) toggleProvider(id);
       
       if (id === 'local') {
@@ -67,8 +80,22 @@ export default function SettingsScreen() {
   const onDisconnect = async (id: CloudProviderId) => {
     const adapter = adapters.find((a) => a.id === id);
     if (!adapter) return;
-    await adapter.disconnect();
-    setConnected((c) => ({ ...c, [id]: false }));
+    
+    Alert.alert(
+      `Disconnect ${adapter.displayName}?`,
+      'Your recipes will remain in local SQLite. This only disconnects this storage provider.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Disconnect',
+          style: 'destructive',
+          onPress: async () => {
+            await adapter.disconnect();
+            await loadConnectionStates(); // Refresh all states
+          },
+        },
+      ]
+    );
   };
 
   const onSync = async () => {
@@ -137,6 +164,7 @@ export default function SettingsScreen() {
       {adapters.map((a) => {
         const enabled = enabledProviders.includes(a.id);
         const isOn = !!connected[a.id];
+        const session = sessions[a.id];
         const isLocal = a.id === 'local';
         return (
           <View key={a.id} style={StyleSheet.flatten([styles.card, !a.available && styles.cardDisabled])}>
@@ -147,7 +175,7 @@ export default function SettingsScreen() {
                   {!a.available
                     ? 'Unavailable on this platform'
                     : isOn
-                      ? isLocal ? 'Connected' : 'Stub-connected'
+                      ? isLocal ? 'Connected' : 'Connected (stub)'
                       : 'Not connected'}
                 </Text>
               </View>
@@ -159,21 +187,38 @@ export default function SettingsScreen() {
                 onValueChange={() => toggleProvider(a.id)}
               />
             </View>
-            <Text style={styles.notes}>{a.authNotes}</Text>
+            
+            {isOn && session?.accountLabel ? (
+              <View style={styles.connectedInfo}>
+                <Text style={styles.connectedLabel}>
+                  {isLocal ? '📁 Storage location:' : '👤 Connected as:'}
+                </Text>
+                <Text style={styles.connectedValue} numberOfLines={2}>
+                  {session.accountLabel}
+                </Text>
+              </View>
+            ) : null}
+            
+            {!isOn && <Text style={styles.notes}>{a.authNotes}</Text>}
+            
             <View style={styles.row}>
               <Pressable
-                style={styles.btn}
+                style={StyleSheet.flatten([styles.btn, isOn && styles.btnConnected])}
                 onPress={() => void onConnect(a.id)}
                 disabled={!a.available || isOn}
               >
-                <Text style={styles.btnText}>{isOn ? 'Connected' : 'Connect'}</Text>
+                <Text style={StyleSheet.flatten([styles.btnText, isOn && styles.btnConnectedText])}>
+                  {isOn ? '✓ Connected' : 'Connect'}
+                </Text>
               </Pressable>
               <Pressable 
-                style={styles.btnSecondary} 
+                style={StyleSheet.flatten([styles.btnSecondary, !isOn && styles.btnSecondaryDisabled])} 
                 onPress={() => void onDisconnect(a.id)}
                 disabled={!isOn}
               >
-                <Text style={styles.btnSecondaryText}>Disconnect</Text>
+                <Text style={StyleSheet.flatten([styles.btnSecondaryText, !isOn && styles.btnSecondaryTextDisabled])}>
+                  Disconnect
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -243,6 +288,29 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: 8,
   },
   btnSecondaryText: { color: colors.text, fontWeight: '600' },
+  btnSecondaryDisabled: { opacity: 0.4 },
+  btnSecondaryTextDisabled: { opacity: 0.4 },
+  btnConnected: { backgroundColor: colors.success, opacity: 0.7 },
+  btnConnectedText: { color: colors.onPrimary },
+  connectedInfo: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: 8,
+    padding: space.sm,
+    marginVertical: space.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+  },
+  connectedLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.primary,
+    marginBottom: 4,
+  },
+  connectedValue: {
+    fontSize: 13,
+    color: colors.text,
+    fontWeight: '500',
+  },
   syncBtn: {
     backgroundColor: colors.success,
     paddingVertical: space.md,
