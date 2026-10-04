@@ -59,6 +59,18 @@ async function clearTokens(): Promise<void> {
   await deleteSecret('dropbox');
 }
 
+async function storeCodeVerifier(verifier: string): Promise<void> {
+  await saveSecret('dropbox_code_verifier', verifier);
+}
+
+async function getCodeVerifier(): Promise<string | null> {
+  return await readSecret('dropbox_code_verifier');
+}
+
+async function clearCodeVerifier(): Promise<void> {
+  await deleteSecret('dropbox_code_verifier');
+}
+
 async function refreshAccessToken(refreshToken: string): Promise<DropboxTokens> {
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
@@ -147,62 +159,25 @@ async function apiRequest(
   return response;
 }
 
-export const dropboxAdapter: CloudStorageAdapter = {
-  id: 'dropbox',
-  displayName: 'Dropbox',
-  authNotes:
-    'Cloud sync to your personal Dropbox. Stores recipes in /Cupboard Notes folder. One-tap OAuth connection.',
-  available: true,
+/**
+ * Complete Dropbox OAuth flow with authorization code.
+ * Used by both the connect() method and the /auth callback route.
+ * 
+ * @param code - Authorization code from Dropbox
+ * @returns CloudAuthSession with account info
+ */
+export async function completeDropboxOAuth(code: string): Promise<CloudAuthSession> {
+  if (!DROPBOX_APP_KEY) {
+    throw new Error('Dropbox app key not configured');
+  }
 
-  async isConnected() {
-    const tokens = await getStoredTokens();
-    return tokens !== null;
-  },
+  // Retrieve stored code verifier
+  const codeVerifier = await getCodeVerifier();
+  if (!codeVerifier) {
+    throw new Error('Code verifier not found. Please restart the OAuth flow.');
+  }
 
-  async getSession() {
-    const tokens = await getStoredTokens();
-    if (!tokens) return null;
-
-    return {
-      providerId: 'dropbox',
-      accountLabel: tokens.accountLabel || 'Dropbox Account',
-      connectedAt: tokens.connectedAt,
-    };
-  },
-
-  async connect(): Promise<CloudAuthSession> {
-    if (!DROPBOX_APP_KEY) {
-      throw new Error(
-        'Dropbox app key not configured. This is a developer setup issue.\n\nAdd EXPO_PUBLIC_DROPBOX_APP_KEY to your .env file or DROPBOX_APP_KEY to app.json extra.\n\nSee README for setup instructions.'
-      );
-    }
-
-    const codeVerifier = await generateCodeVerifier();
-    const codeChallenge = await generateCodeChallenge(codeVerifier);
-
-    // Omit `scope` so Dropbox grants all permissions enabled on the app.
-    const authParams: Record<string, string> = {
-      client_id: DROPBOX_APP_KEY,
-      response_type: 'code',
-      redirect_uri: REDIRECT_URI,
-      code_challenge: codeChallenge,
-      code_challenge_method: 'S256',
-      token_access_type: 'offline',
-    };
-    const authUrl = `${AUTH_ENDPOINT}?${new URLSearchParams(authParams).toString()}`;
-
-    const result = await WebBrowser.openAuthSessionAsync(authUrl, REDIRECT_URI);
-
-    if (result.type !== 'success') {
-      throw new Error('OAuth flow cancelled or failed');
-    }
-
-    const params = new URLSearchParams(result.url.split('?')[1]);
-    const code = params.get('code');
-    if (!code) {
-      throw new Error('No authorization code received');
-    }
-
+  try {
     const tokenBody = new URLSearchParams({
       grant_type: 'authorization_code',
       code,
@@ -262,12 +237,82 @@ export const dropboxAdapter: CloudStorageAdapter = {
     };
 
     await saveTokens(tokens);
+    await clearCodeVerifier();
 
     return {
       providerId: 'dropbox',
       accountLabel: accountInfo.accountLabel,
       connectedAt,
     };
+  } catch (error) {
+    await clearCodeVerifier();
+    throw error;
+  }
+}
+
+export const dropboxAdapter: CloudStorageAdapter = {
+  id: 'dropbox',
+  displayName: 'Dropbox',
+  authNotes:
+    'Cloud sync to your personal Dropbox. Stores recipes in /Cupboard Notes folder. One-tap OAuth connection.',
+  available: true,
+
+  async isConnected() {
+    const tokens = await getStoredTokens();
+    return tokens !== null;
+  },
+
+  async getSession() {
+    const tokens = await getStoredTokens();
+    if (!tokens) return null;
+
+    return {
+      providerId: 'dropbox',
+      accountLabel: tokens.accountLabel || 'Dropbox Account',
+      connectedAt: tokens.connectedAt,
+    };
+  },
+
+  async connect(): Promise<CloudAuthSession> {
+    if (!DROPBOX_APP_KEY) {
+      throw new Error(
+        'Dropbox app key not configured. This is a developer setup issue.\n\nAdd EXPO_PUBLIC_DROPBOX_APP_KEY to your .env file or DROPBOX_APP_KEY to app.json extra.\n\nSee README for setup instructions.'
+      );
+    }
+
+    const codeVerifier = await generateCodeVerifier();
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+
+    // Store code verifier for the auth callback route to use (if deep link occurs)
+    await storeCodeVerifier(codeVerifier);
+
+    // Omit `scope` so Dropbox grants all permissions enabled on the app.
+    const authParams: Record<string, string> = {
+      client_id: DROPBOX_APP_KEY,
+      response_type: 'code',
+      redirect_uri: REDIRECT_URI,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+      token_access_type: 'offline',
+    };
+    const authUrl = `${AUTH_ENDPOINT}?${new URLSearchParams(authParams).toString()}`;
+
+    const result = await WebBrowser.openAuthSessionAsync(authUrl, REDIRECT_URI);
+
+    if (result.type !== 'success') {
+      await clearCodeVerifier();
+      throw new Error('OAuth flow cancelled or failed');
+    }
+
+    const params = new URLSearchParams(result.url.split('?')[1]);
+    const code = params.get('code');
+    if (!code) {
+      await clearCodeVerifier();
+      throw new Error('No authorization code received');
+    }
+
+    // Complete OAuth flow with shared function
+    return await completeDropboxOAuth(code);
   },
 
   async disconnect() {
