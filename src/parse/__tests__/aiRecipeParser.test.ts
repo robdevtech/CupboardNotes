@@ -18,14 +18,15 @@ describe('parseAiRecipeResponse', () => {
       ],
     });
 
-    const result = parseAiRecipeResponse(input);
+    const recipes = parseAiRecipeResponse(input);
 
-    expect(result.title).toBe('Chocolate Chip Cookies');
-    expect(result.description).toBe('Classic cookies');
-    expect(result.ingredients).toHaveLength(3);
-    expect(result.ingredients[0]).toBe('2 cups flour');
-    expect(result.instructions).toHaveLength(3);
-    expect(result.instructions[0]).toBe('Mix dry ingredients');
+    expect(recipes).toHaveLength(1);
+    expect(recipes[0].title).toBe('Chocolate Chip Cookies');
+    expect(recipes[0].description).toBe('Classic cookies');
+    expect(recipes[0].ingredients).toHaveLength(3);
+    expect(recipes[0].ingredients[0]).toBe('2 cups flour');
+    expect(recipes[0].instructions).toHaveLength(3);
+    expect(recipes[0].instructions[0]).toBe('Mix dry ingredients');
   });
 
   it('extracts JSON from markdown code fence', () => {
@@ -46,11 +47,11 @@ describe('parseAiRecipeResponse', () => {
 
 Hope this helps!`;
 
-    const result = parseAiRecipeResponse(input);
+    const recipes = parseAiRecipeResponse(input);
 
-    expect(result.title).toBe('Pasta Carbonara');
-    expect(result.ingredients).toHaveLength(3);
-    expect(result.instructions).toHaveLength(3);
+    expect(recipes[0].title).toBe('Pasta Carbonara');
+    expect(recipes[0].ingredients).toHaveLength(3);
+    expect(recipes[0].instructions).toHaveLength(3);
   });
 
   it('extracts JSON from code fence without language tag', () => {
@@ -66,10 +67,10 @@ Hope this helps!`;
 }
 \`\`\``;
 
-    const result = parseAiRecipeResponse(input);
+    const recipes = parseAiRecipeResponse(input);
 
-    expect(result.title).toBe('Quick Salad');
-    expect(result.ingredients).toHaveLength(2);
+    expect(recipes[0].title).toBe('Quick Salad');
+    expect(recipes[0].ingredients).toHaveLength(2);
   });
 
   it('handles trailing commas', () => {
@@ -85,11 +86,11 @@ Hope this helps!`;
   ],
 }`;
 
-    const result = parseAiRecipeResponse(input);
+    const recipes = parseAiRecipeResponse(input);
 
-    expect(result.title).toBe('Test Recipe');
-    expect(result.ingredients).toHaveLength(2);
-    expect(result.instructions).toHaveLength(1);
+    expect(recipes[0].title).toBe('Test Recipe');
+    expect(recipes[0].ingredients).toHaveLength(2);
+    expect(recipes[0].instructions).toHaveLength(1);
   });
 
   it('handles smart quotes', () => {
@@ -104,10 +105,10 @@ Hope this helps!`;
   ]
 }`;
 
-    const result = parseAiRecipeResponse(input);
+    const recipes = parseAiRecipeResponse(input);
 
-    expect(result.title).toBe("Chef's Special");
-    expect(result.description).toContain('delicious');
+    expect(recipes[0].title).toBe("Chef's Special");
+    expect(recipes[0].description).toContain('delicious');
   });
 
   it('handles instructions as plain strings', () => {
@@ -118,11 +119,11 @@ Hope this helps!`;
       recipeInstructions: ['Toast the bread', 'Spread butter', 'Serve warm'],
     });
 
-    const result = parseAiRecipeResponse(input);
+    const recipes = parseAiRecipeResponse(input);
 
-    expect(result.title).toBe('Simple Toast');
-    expect(result.instructions).toHaveLength(3);
-    expect(result.instructions[0]).toBe('Toast the bread');
+    expect(recipes[0].title).toBe('Simple Toast');
+    expect(recipes[0].instructions).toHaveLength(3);
+    expect(recipes[0].instructions[0]).toBe('Toast the bread');
   });
 
   it('handles instructions with HowToSection', () => {
@@ -149,12 +150,12 @@ Hope this helps!`;
       ],
     });
 
-    const result = parseAiRecipeResponse(input);
+    const recipes = parseAiRecipeResponse(input);
 
-    expect(result.title).toBe('Complex Dish');
-    expect(result.instructions).toHaveLength(3);
-    expect(result.instructions[0]).toBe('Prep step 1');
-    expect(result.instructions[2]).toBe('Cook step 1');
+    expect(recipes[0].title).toBe('Complex Dish');
+    expect(recipes[0].instructions).toHaveLength(3);
+    expect(recipes[0].instructions[0]).toBe('Prep step 1');
+    expect(recipes[0].instructions[2]).toBe('Cook step 1');
   });
 
   it('handles @graph wrapper', () => {
@@ -174,10 +175,10 @@ Hope this helps!`;
       ],
     });
 
-    const result = parseAiRecipeResponse(input);
+    const recipes = parseAiRecipeResponse(input);
 
-    expect(result.title).toBe('Graph Recipe');
-    expect(result.ingredients).toHaveLength(2);
+    expect(recipes[0].title).toBe('Graph Recipe');
+    expect(recipes[0].ingredients).toHaveLength(2);
   });
 
   it('handles top-level array', () => {
@@ -190,9 +191,9 @@ Hope this helps!`;
       },
     ]);
 
-    const result = parseAiRecipeResponse(input);
+    const recipes = parseAiRecipeResponse(input);
 
-    expect(result.title).toBe('Array Recipe');
+    expect(recipes[0].title).toBe('Array Recipe');
   });
 
   it('extracts JSON surrounded by chatter', () => {
@@ -209,10 +210,10 @@ Hope this helps!`;
 
 Let me know if you need any modifications!`;
 
-    const result = parseAiRecipeResponse(input);
+    const recipes = parseAiRecipeResponse(input);
 
-    expect(result.title).toBe('Chatty Recipe');
-    expect(result.ingredients).toHaveLength(2);
+    expect(recipes[0].title).toBe('Chatty Recipe');
+    expect(recipes[0].ingredients).toHaveLength(2);
   });
 
   it('handles [unclear] markers from AI', () => {
@@ -225,11 +226,11 @@ Let me know if you need any modifications!`;
       ],
     });
 
-    const result = parseAiRecipeResponse(input);
+    const recipes = parseAiRecipeResponse(input);
 
-    expect(result.title).toBe('Unclear Recipe');
-    expect(result.ingredients).toHaveLength(3);
-    expect(result.ingredients[0]).toContain('[unclear]');
+    expect(recipes[0].title).toBe('Unclear Recipe');
+    expect(recipes[0].ingredients).toHaveLength(3);
+    expect(recipes[0].ingredients[0]).toContain('[unclear]');
   });
 
   it('throws error when no JSON found', () => {
@@ -270,9 +271,9 @@ Let me know if you need any modifications!`;
       recipeInstructions: [{ '@type': 'HowToStep', text: 'cook' }],
     });
 
-    const result = parseAiRecipeResponse(input);
+    const recipes = parseAiRecipeResponse(input);
 
-    expect(result.servings).toBe(4);
+    expect(recipes[0].servings).toBe(4);
   });
 
   it('handles recipeYield as number', () => {
@@ -284,9 +285,9 @@ Let me know if you need any modifications!`;
       recipeInstructions: [{ '@type': 'HowToStep', text: 'cook' }],
     });
 
-    const result = parseAiRecipeResponse(input);
+    const recipes = parseAiRecipeResponse(input);
 
-    expect(result.servings).toBe(6);
+    expect(recipes[0].servings).toBe(6);
   });
 
   it('preserves quantities while normalizing unit names', () => {
@@ -302,12 +303,12 @@ Let me know if you need any modifications!`;
       recipeInstructions: [{ '@type': 'HowToStep', text: 'Mix all' }],
     });
 
-    const result = parseAiRecipeResponse(input);
+    const recipes = parseAiRecipeResponse(input);
 
-    expect(result.ingredients[0]).toBe('250g flour');
-    expect(result.ingredients[1]).toBe('2 cups milk');
-    expect(result.ingredients[2]).toBe('1 tbsp vanilla');  // normalized
-    expect(result.ingredients[3]).toBe('3 whole eggs');
+    expect(recipes[0].ingredients[0]).toBe('250g flour');
+    expect(recipes[0].ingredients[1]).toBe('2 cups milk');
+    expect(recipes[0].ingredients[2]).toBe('1 tbsp vanilla');  // normalized
+    expect(recipes[0].ingredients[3]).toBe('3 whole eggs');
   });
 
   it('handles real-world AI response with extra formatting', () => {
@@ -362,16 +363,16 @@ Let me know if you need any modifications!`;
 
 This recipe should work well for you! Let me know if you need any adjustments.`;
 
-    const result = parseAiRecipeResponse(input);
+    const recipes = parseAiRecipeResponse(input);
 
-    expect(result.title).toBe("Grandma's Apple Pie");
-    expect(result.description).toContain('classic American apple pie');
-    expect(result.servings).toBe(8);
-    expect(result.ingredients).toHaveLength(8);
-    expect(result.ingredients[0]).toBe('2 1/2 cups all-purpose flour');
-    expect(result.ingredients[7]).toBe('a pinch of nutmeg');
-    expect(result.instructions).toHaveLength(5);
-    expect(result.instructions[4]).toContain('Bake at 375°F');
+    expect(recipes[0].title).toBe("Grandma's Apple Pie");
+    expect(recipes[0].description).toContain('classic American apple pie');
+    expect(recipes[0].servings).toBe(8);
+    expect(recipes[0].ingredients).toHaveLength(8);
+    expect(recipes[0].ingredients[0]).toBe('2 1/2 cups all-purpose flour');
+    expect(recipes[0].ingredients[7]).toBe('a pinch of nutmeg');
+    expect(recipes[0].instructions).toHaveLength(5);
+    expect(recipes[0].instructions[4]).toContain('Bake at 375°F');
   });
 
   it('handles cookbook recipe with position, cookingMethod, and [unclear] values', () => {
@@ -383,42 +384,42 @@ This recipe should work well for you! Let me know if you need any adjustments.`;
 
 Would you like me to import the Biscuit Pastry (page 309) and Rich Short Pastry (page 308) recipes as well?`;
 
-    const result = parseAiRecipeResponse(input);
+    const recipes = parseAiRecipeResponse(input);
 
-    expect(result.title).toBe('Strawberry Tartlets');
-    expect(result.description).toContain('Tartlet cases');
+    expect(recipes[0].title).toBe('Strawberry Tartlets');
+    expect(recipes[0].description).toContain('Tartlet cases');
     
     // [unclear] values should be treated as null/empty
-    expect(result.servings).toBeNull();
-    expect(result.prepTimeMinutes).toBeNull();
-    expect(result.totalTimeMinutes).toBeNull();
+    expect(recipes[0].servings).toBeNull();
+    expect(recipes[0].prepTimeMinutes).toBeNull();
+    expect(recipes[0].totalTimeMinutes).toBeNull();
     
     // Valid ISO duration should parse
-    expect(result.cookTimeMinutes).toBe(20);
+    expect(recipes[0].cookTimeMinutes).toBe(20);
     
     // Instructions should be in order by position
-    expect(result.instructions).toHaveLength(6);
-    expect(result.instructions[0]).toContain('To make fruit juice');
-    expect(result.instructions[1]).toContain('Line patty tins');
-    expect(result.instructions[2]).toContain('Bake until a very pale brown');
-    expect(result.instructions[3]).toContain('Fill up cases');
-    expect(result.instructions[4]).toContain('Thicken the fruit juice');
-    expect(result.instructions[5]).toContain('Glaze fruit');
+    expect(recipes[0].instructions).toHaveLength(6);
+    expect(recipes[0].instructions[0]).toContain('To make fruit juice');
+    expect(recipes[0].instructions[1]).toContain('Line patty tins');
+    expect(recipes[0].instructions[2]).toContain('Bake until a very pale brown');
+    expect(recipes[0].instructions[3]).toContain('Fill up cases');
+    expect(recipes[0].instructions[4]).toContain('Thicken the fruit juice');
+    expect(recipes[0].instructions[5]).toContain('Glaze fruit');
     
     // cookingMethod should be extracted as notes
-    expect(result.notes).toContain('Bake at 190°C');
-    expect(result.notes).toContain('Note: A little cream spread on bottom of case');
+    expect(recipes[0].notes).toContain('Bake at 190°C');
+    expect(recipes[0].notes).toContain('Note: A little cream spread on bottom of case');
     
     // Ingredients should have ml abbreviations (normalized)
-    expect(result.ingredients).toContain('125 ml cream');
-    expect(result.ingredients).toContain('125 ml fruit juice');
-    expect(result.ingredients).toContain('2 tsp arrowroot or sachet of quick setting gel');
-    expect(result.ingredients).toContain('1 tbsp sugar');
+    expect(recipes[0].ingredients).toContain('125 ml cream');
+    expect(recipes[0].ingredients).toContain('125 ml fruit juice');
+    expect(recipes[0].ingredients).toContain('2 tsp arrowroot or sachet of quick setting gel');
+    expect(recipes[0].ingredients).toContain('1 tbsp sugar');
     
     // Referenced recipes should be extracted
-    expect(result.referencedRecipes).toHaveLength(2);
-    expect(result.referencedRecipes[0]).toEqual({ name: 'Biscuit Pastry', page: '309' });
-    expect(result.referencedRecipes[1]).toEqual({ name: 'Rich Short Pastry', page: '308' });
+    expect(recipes[0].referencedRecipes).toHaveLength(2);
+    expect(recipes[0].referencedRecipes[0]).toEqual({ name: 'Biscuit Pastry', page: '309' });
+    expect(recipes[0].referencedRecipes[1]).toEqual({ name: 'Rich Short Pastry', page: '308' });
   });
 
   it('normalizes verbose unit names to abbreviations', () => {
@@ -439,16 +440,103 @@ Would you like me to import the Biscuit Pastry (page 309) and Rich Short Pastry 
       recipeInstructions: [{ '@type': 'HowToStep', text: 'Mix all' }],
     });
 
-    const result = parseAiRecipeResponse(input);
+    const recipes = parseAiRecipeResponse(input);
 
-    expect(result.ingredients[0]).toBe('250 ml milk');
-    expect(result.ingredients[1]).toBe('2 l water');
-    expect(result.ingredients[2]).toBe('500 g flour');
-    expect(result.ingredients[3]).toBe('1 kg sugar');
-    expect(result.ingredients[4]).toBe('3 tsp vanilla');
-    expect(result.ingredients[5]).toBe('2 tbsp butter');
-    expect(result.ingredients[6]).toBe('8 oz cheese');
-    expect(result.ingredients[7]).toBe('1 lb beef');
-    expect(result.ingredients[8]).toBe('2 tsp salt');
+    expect(recipes[0].ingredients[0]).toBe('250 ml milk');
+    expect(recipes[0].ingredients[1]).toBe('2 l water');
+    expect(recipes[0].ingredients[2]).toBe('500 g flour');
+    expect(recipes[0].ingredients[3]).toBe('1 kg sugar');
+    expect(recipes[0].ingredients[4]).toBe('3 tsp vanilla');
+    expect(recipes[0].ingredients[5]).toBe('2 tbsp butter');
+    expect(recipes[0].ingredients[6]).toBe('8 oz cheese');
+    expect(recipes[0].ingredients[7]).toBe('1 lb beef');
+    expect(recipes[0].ingredients[8]).toBe('2 tsp salt');
   });
 });
+
+  it('handles multiple recipes in JSON array', () => {
+    const input = JSON.stringify([
+      {
+        '@type': 'Recipe',
+        name: 'Recipe One',
+        recipeIngredient: ['ingredient 1'],
+        recipeInstructions: [{ '@type': 'HowToStep', text: 'Step 1' }],
+      },
+      {
+        '@type': 'Recipe',
+        name: 'Recipe Two',
+        recipeIngredient: ['ingredient 2'],
+        recipeInstructions: [{ '@type': 'HowToStep', text: 'Step 2' }],
+      },
+    ]);
+
+    const recipes = parseAiRecipeResponse(input);
+
+    expect(recipes).toHaveLength(2);
+    expect(recipes[0].title).toBe('Recipe One');
+    expect(recipes[1].title).toBe('Recipe Two');
+  });
+
+  it('handles multiple fenced code blocks', () => {
+    const input = `Here are your recipes:
+
+\`\`\`json
+{
+  "@type": "Recipe",
+  "name": "First Recipe",
+  "recipeIngredient": ["flour"],
+  "recipeInstructions": [{"@type": "HowToStep", "text": "Mix"}]
+}
+\`\`\`
+
+\`\`\`json
+{
+  "@type": "Recipe",
+  "name": "Second Recipe",
+  "recipeIngredient": ["sugar"],
+  "recipeInstructions": [{"@type": "HowToStep", "text": "Stir"}]
+}
+\`\`\``;
+
+    const recipes = parseAiRecipeResponse(input);
+
+    expect(recipes).toHaveLength(2);
+    expect(recipes[0].title).toBe('First Recipe');
+    expect(recipes[1].title).toBe('Second Recipe');
+  });
+
+  it('handles batch import with cross-references (Strawberry Tartlets + Biscuit Pastry)', () => {
+    const input = JSON.stringify([
+      {
+        '@type': 'Recipe',
+        name: 'Biscuit Pastry',
+        recipeIngredient: ['200 g flour', '100 g butter', '50 ml water'],
+        recipeInstructions: [
+          { '@type': 'HowToStep', position: 1, text: 'Rub butter into flour' },
+          { '@type': 'HowToStep', position: 2, text: 'Add water and form dough' },
+        ],
+      },
+      {
+        '@type': 'Recipe',
+        name: 'Strawberry Tartlets',
+        recipeIngredient: [
+          '200 g biscuit pastry (see above)',
+          '200 g strawberries',
+          '125 ml cream',
+        ],
+        recipeInstructions: [
+          { '@type': 'HowToStep', position: 1, text: 'Line tins with pastry' },
+          { '@type': 'HowToStep', position: 2, text: 'Fill with strawberries' },
+        ],
+        referencedRecipes: [{ name: 'Biscuit Pastry', page: null }],
+      },
+    ]);
+
+    const recipes = parseAiRecipeResponse(input);
+
+    expect(recipes).toHaveLength(2);
+    expect(recipes[0].title).toBe('Biscuit Pastry');
+    expect(recipes[1].title).toBe('Strawberry Tartlets');
+    expect(recipes[1].referencedRecipes).toHaveLength(1);
+    expect(recipes[1].referencedRecipes[0].name).toBe('Biscuit Pastry');
+  });

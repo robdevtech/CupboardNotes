@@ -8,12 +8,13 @@ import {
   Alert,
   ScrollView,
   ActivityIndicator,
+  Switch,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
-import { parseAiRecipeResponse } from '../src/parse/aiRecipeParser';
+import { parseAiRecipeResponse, type JsonLdRecipe } from '../src/parse/aiRecipeParser';
 import { parseIngredientLine } from '../src/parse/ingredientParse';
 import { newId } from '../src/domain/ids';
 import * as repo from '../src/storage/recipeRepo';
@@ -37,14 +38,14 @@ For recipeInstructions:
 - Put oven temperature, shelf position, and general cooking notes in the "cookingMethod" field, NOT inside a step
 - If there are additional notes that don't fit in cookingMethod, create a final HowToStep with name "Note"
 
-Referenced recipes in the book:
+Referenced recipes and multiple recipes:
 - When an ingredient or step refers to another recipe (e.g., "Biscuit Pastry (page 309)"), keep it in the ingredient line
 - Add a top-level "referencedRecipes" array: [{"name": "Recipe Name", "page": "123"}]
-- After the JSON, ask the user to send those pages too so you can import the complete set
+- If the user sends several recipes or referenced pages, reply with a JSON array containing one Recipe object per recipe, and include referencedRecipes on any recipe that uses another
 
-Reply with ONLY the JSON object - no explanations, no markdown fences, no extra text.
+Reply with ONLY the JSON object (or array) - no explanations, no markdown fences, no extra text.
 
-Example format:
+Example format (single recipe):
 {
   "@context": "https://schema.org",
   "@type": "Recipe",
@@ -90,6 +91,8 @@ export default function ImportAiScreen() {
 
   const [aiResponse, setAiResponse] = useState('');
   const [busy, setBusy] = useState(false);
+  const [parsedRecipes, setParsedRecipes] = useState<JsonLdRecipe[] | null>(null);
+  const [selectedRecipes, setSelectedRecipes] = useState<Set<number>>(new Set());
 
   const onCopyPrompt = async () => {
     try {
@@ -136,19 +139,27 @@ export default function ImportAiScreen() {
 
     setBusy(true);
     try {
-      const data = parseAiRecipeResponse(aiResponse.trim());
-      const created = await repo.createRecipe({
-        title: data.title,
-        description: data.description,
-        notes: data.notes,
-        servings: data.servings && data.servings > 0 ? data.servings : 4,
-        ingredients: data.ingredients.map((line) => parseIngredientLine(line)),
-        steps: data.instructions.map((text, order) => ({ id: newId(), text, order })),
-        photos: [],
-        sourceUrl: 'AI import',
-      });
-      await refresh();
-      router.replace(`/recipe/edit?id=${created.id}`);
+      const recipes = parseAiRecipeResponse(aiResponse.trim());
+      
+      if (recipes.length === 1) {
+        // Single recipe - go directly to edit
+        const created = await repo.createRecipe({
+          title: recipes[0].title,
+          description: recipes[0].description,
+          notes: recipes[0].notes,
+          servings: recipes[0].servings && recipes[0].servings > 0 ? recipes[0].servings : 4,
+          ingredients: recipes[0].ingredients.map((line) => parseIngredientLine(line)),
+          steps: recipes[0].instructions.map((text, order) => ({ id: newId(), text, order })),
+          photos: [],
+          sourceUrl: 'AI import',
+        });
+        await refresh();
+        router.replace(`/recipe/edit?id=${created.id}`);
+      } else {
+        // Multiple recipes - show batch preview
+        setParsedRecipes(recipes);
+        setSelectedRecipes(new Set(recipes.map((_, i) => i)));
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Import failed';
       Alert.alert('Import failed', msg);
@@ -157,60 +168,187 @@ export default function ImportAiScreen() {
     }
   };
 
+  const onImportSelected = async () => {
+    if (!parsedRecipes) return;
+    
+    const selected = parsedRecipes.filter((_, i) => selectedRecipes.has(i));
+    if (selected.length === 0) {
+      Alert.alert('No recipes selected', 'Please select at least one recipe to import.');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      // Create name->id map for auto-linking
+      const nameToId: Record<string, string> = {};
+      
+      // First pass: create all recipes and build name map
+      for (const recipe of selected) {
+        const created = await repo.createRecipe({
+          title: recipe.title,
+          description: recipe.description,
+          notes: recipe.notes,
+          servings: recipe.servings && recipe.servings > 0 ? recipe.servings : 4,
+          ingredients: recipe.ingredients.map((line) => parseIngredientLine(line)),
+          steps: recipe.instructions.map((text, order) => ({ id: newId(), text, order })),
+          photos: [],
+          sourceUrl: 'AI import (batch)',
+        });
+        nameToId[recipe.title.toLowerCase()] = created.id;
+      }
+      
+      // Second pass: create auto-links for referenced recipes in same batch
+      for (const recipe of selected) {
+        const recipeId = nameToId[recipe.title.toLowerCase()];
+        for (const ref of recipe.referencedRecipes) {
+          const linkedId = nameToId[ref.name.toLowerCase()];
+          if (linkedId && linkedId !== recipeId) {
+            // TODO: Store link once we have recipe_links table
+            // For now, referenced recipes are just noted in the notes field
+            console.log(`Would link ${recipe.title} -> ${ref.name} (${linkedId})`);
+          }
+        }
+      }
+      
+      await refresh();
+      Alert.alert(
+        'Import complete',
+        `Imported ${selected.length} recipe${selected.length > 1 ? 's' : ''} successfully.`,
+        [{ text: 'OK', onPress: () => router.back() }]
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Import failed';
+      Alert.alert('Batch import failed', msg);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleRecipe = (index: number) => {
+    setSelectedRecipes((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-      <Text style={styles.heading}>Import with AI</Text>
-      <Text style={styles.help}>
-        Use ChatGPT, Claude, Gemini, or any AI to convert recipes from text or photos into
-        structured JSON. Completely offline after you get the AI response — no API keys needed.
-      </Text>
+      {parsedRecipes ? (
+        // Batch preview UI
+        <>
+          <Text style={styles.heading}>Import Recipes</Text>
+          <Text style={styles.help}>
+            {parsedRecipes.length} recipe{parsedRecipes.length > 1 ? 's' : ''} found. Select which
+            to import:
+          </Text>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Step 1: Copy the prompt</Text>
-        <Text style={styles.sectionBody}>
-          Copy the prompt below and paste it into your preferred AI (ChatGPT, Claude, Gemini, or a
-          local model). Then either type the recipe or attach a photo of a cookbook page.
-        </Text>
-        <View style={styles.btnRow}>
-          <Pressable style={styles.btnPrimary} onPress={() => void onCopyPrompt()}>
-            <Text style={styles.btnPrimaryText}>Copy prompt</Text>
+          {parsedRecipes.map((recipe, index) => (
+            <Pressable
+              key={index}
+              style={styles.recipeCard}
+              onPress={() => toggleRecipe(index)}
+            >
+              <View style={styles.recipeCardRow}>
+                <View style={styles.recipeCardInfo}>
+                  <Text style={styles.recipeCardTitle}>{recipe.title}</Text>
+                  {recipe.description ? (
+                    <Text style={styles.recipeCardDesc} numberOfLines={2}>
+                      {recipe.description}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.recipeCardMeta}>
+                    {recipe.ingredients.length} ingredients · {recipe.instructions.length} steps
+                  </Text>
+                </View>
+                <Switch
+                  value={selectedRecipes.has(index)}
+                  onValueChange={() => toggleRecipe(index)}
+                />
+              </View>
+            </Pressable>
+          ))}
+
+          <Pressable
+            style={StyleSheet.flatten([styles.btnImport, busy && styles.btnDisabled])}
+            onPress={() => void onImportSelected()}
+            disabled={busy || selectedRecipes.size === 0}
+          >
+            {busy ? (
+              <ActivityIndicator color={colors.onPrimary} />
+            ) : (
+              <Text style={styles.btnImportText}>
+                Import {selectedRecipes.size} selected
+              </Text>
+            )}
           </Pressable>
-          <Pressable style={styles.btnSecondary} onPress={() => void onSharePrompt()}>
-            <Text style={styles.btnSecondaryText}>Share prompt</Text>
+
+          <Pressable style={styles.btnCancel} onPress={() => setParsedRecipes(null)}>
+            <Text style={styles.btnCancelText}>Cancel</Text>
           </Pressable>
-        </View>
-      </View>
+        </>
+      ) : (
+        // Original import UI
+        <>
+          <Text style={styles.heading}>Import with AI</Text>
+          <Text style={styles.help}>
+            Use ChatGPT, Claude, Gemini, or any AI to convert recipes from text or photos into
+            structured JSON. Completely offline after you get the AI response — no API keys needed.
+          </Text>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Step 2: Paste AI response</Text>
-        <Text style={styles.sectionBody}>
-          The AI will reply with JSON. Copy that entire response and paste it here.
-        </Text>
-        <Pressable style={styles.btnSecondary} onPress={() => void onPasteFromClipboard()}>
-          <Text style={styles.btnSecondaryText}>Paste from clipboard</Text>
-        </Pressable>
-        <TextInput
-          style={styles.input}
-          value={aiResponse}
-          onChangeText={setAiResponse}
-          placeholder="Paste the AI's JSON response here..."
-          placeholderTextColor={colors.textMuted}
-          multiline
-          textAlignVertical="top"
-        />
-      </View>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Step 1: Copy the prompt</Text>
+            <Text style={styles.sectionBody}>
+              Copy the prompt below and paste it into your preferred AI (ChatGPT, Claude, Gemini, or
+              a local model). Then either type the recipe or attach a photo of a cookbook page. You
+              can send multiple recipes at once.
+            </Text>
+            <View style={styles.btnRow}>
+              <Pressable style={styles.btnPrimary} onPress={() => void onCopyPrompt()}>
+                <Text style={styles.btnPrimaryText}>Copy prompt</Text>
+              </Pressable>
+              <Pressable style={styles.btnSecondary} onPress={() => void onSharePrompt()}>
+                <Text style={styles.btnSecondaryText}>Share prompt</Text>
+              </Pressable>
+            </View>
+          </View>
 
-      <Pressable
-        style={StyleSheet.flatten([styles.btnImport, busy && styles.btnDisabled])}
-        onPress={() => void onImport()}
-        disabled={busy || !aiResponse.trim()}
-      >
-        {busy ? (
-          <ActivityIndicator color={colors.onPrimary} />
-        ) : (
-          <Text style={styles.btnImportText}>Import recipe</Text>
-        )}
-      </Pressable>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Step 2: Paste AI response</Text>
+            <Text style={styles.sectionBody}>
+              The AI will reply with JSON. Copy that entire response and paste it here.
+            </Text>
+            <Pressable style={styles.btnSecondary} onPress={() => void onPasteFromClipboard()}>
+              <Text style={styles.btnSecondaryText}>Paste from clipboard</Text>
+            </Pressable>
+            <TextInput
+              style={styles.input}
+              value={aiResponse}
+              onChangeText={setAiResponse}
+              placeholder="Paste the AI's JSON response here..."
+              placeholderTextColor={colors.textMuted}
+              multiline
+              textAlignVertical="top"
+            />
+          </View>
+
+          <Pressable
+            style={StyleSheet.flatten([styles.btnImport, busy && styles.btnDisabled])}
+            onPress={() => void onImport()}
+            disabled={busy || !aiResponse.trim()}
+          >
+            {busy ? (
+              <ActivityIndicator color={colors.onPrimary} />
+            ) : (
+              <Text style={styles.btnImportText}>Import recipe</Text>
+            )}
+          </Pressable>
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -297,5 +435,46 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.onPrimary,
       fontWeight: '700',
       fontSize: 16,
+    },
+    recipeCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: space.md,
+      marginBottom: space.sm,
+    },
+    recipeCardRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: space.sm,
+    },
+    recipeCardInfo: {
+      flex: 1,
+    },
+    recipeCardTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 4,
+    },
+    recipeCardDesc: {
+      fontSize: 13,
+      color: colors.textMuted,
+      marginBottom: 4,
+    },
+    recipeCardMeta: {
+      fontSize: 12,
+      color: colors.textMuted,
+    },
+    btnCancel: {
+      padding: space.md,
+      borderRadius: 12,
+      alignItems: 'center',
+      marginTop: space.sm,
+    },
+    btnCancelText: {
+      color: colors.text,
+      fontWeight: '600',
     },
   });
