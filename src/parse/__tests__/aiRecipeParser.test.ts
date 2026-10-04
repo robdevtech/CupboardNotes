@@ -372,4 +372,40 @@ This recipe should work well for you! Let me know if you need any adjustments.`;
     expect(result.instructions).toHaveLength(5);
     expect(result.instructions[4]).toContain('Bake at 375°F');
   });
+
+  it('handles cookbook recipe with position, cookingMethod, and [unclear] values', () => {
+    const input = `Here's the recipe in JSON format:
+
+\`\`\`json
+{"@context":"https://schema.org","@type":"Recipe","name":"Strawberry Tartlets","description":"Tartlet cases of biscuit pastry or rich short pastry filled with strawberries, glazed with thickened fruit juice, and decorated with whipped cream.","recipeYield":"[unclear]","prepTime":"[unclear]","cookTime":"PT20M","totalTime":"[unclear]","recipeIngredient":["200 g Biscuit Pastry (page 309) or Rich Short Pastry (page 308)","200 g fresh Strawberries or 1 pkt. frozen Strawberries","125 ml Cream","125 ml Fruit Juice","Colouring if required","2 level teaspoonfuls Arrowroot or Sachet of quick setting gel","1 tablespoonful sugar"],"recipeInstructions":[{"@type":"HowToStep","position":1,"text":"To make fruit juice: soak fresh strawberries with 1 tablespoonful sugar until juice flows. Make up if necessary to 125 ml with water."},{"@type":"HowToStep","position":2,"text":"Line patty tins with pastry, fork the base."},{"@type":"HowToStep","position":3,"text":"Bake until a very pale brown. Cool."},{"@type":"HowToStep","position":4,"text":"Fill up cases with prepared fruit – halved if necessary."},{"@type":"HowToStep","position":5,"text":"Thicken the fruit juice with blended arrowroot and cook for 1–2 minutes or use a sachet of quick setting gel."},{"@type":"HowToStep","position":6,"text":"Glaze fruit, allow to cool and decorate with whipped cream."}],"recipeCategory":"Dessert","keywords":"strawberry tartlets, pastry","cookingMethod":"Bake at 190°C, No. 5, one-third from the top, 15–20 minutes. Note: A little cream spread on bottom of case helps to prevent the pastry softening."}
+\`\`\`
+
+Hope this helps!`;
+
+    const result = parseAiRecipeResponse(input);
+
+    expect(result.title).toBe('Strawberry Tartlets');
+    expect(result.description).toContain('Tartlet cases');
+    
+    // [unclear] values should be treated as null/empty
+    expect(result.servings).toBeNull();
+    expect(result.prepTimeMinutes).toBeNull();
+    expect(result.totalTimeMinutes).toBeNull();
+    
+    // Valid ISO duration should parse
+    expect(result.cookTimeMinutes).toBe(20);
+    
+    // Instructions should be in order by position
+    expect(result.instructions).toHaveLength(6);
+    expect(result.instructions[0]).toContain('To make fruit juice');
+    expect(result.instructions[1]).toContain('Line patty tins');
+    expect(result.instructions[2]).toContain('Bake until a very pale brown');
+    expect(result.instructions[3]).toContain('Fill up cases');
+    expect(result.instructions[4]).toContain('Thicken the fruit juice');
+    expect(result.instructions[5]).toContain('Glaze fruit');
+    
+    // cookingMethod should be extracted as notes
+    expect(result.notes).toContain('Bake at 190°C');
+    expect(result.notes).toContain('Note: A little cream spread on bottom of case');
+  });
 });

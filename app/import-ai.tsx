@@ -24,11 +24,18 @@ const AI_PROMPT = `Please read the recipe and reply with ONLY a single Schema.or
 
 Requirements:
 - Use the Schema.org Recipe format (https://schema.org/Recipe)
-- Include: name, description, recipeYield, prepTime/cookTime/totalTime (as ISO 8601 durations, e.g., "PT30M"), recipeIngredient (array of strings), recipeInstructions (as HowToStep array with "text" fields), and optional keywords/recipeCategory
+- Include: name, description, recipeYield, prepTime/cookTime/totalTime (as ISO 8601 durations, e.g., "PT30M"), recipeIngredient (array of strings), recipeInstructions (as HowToStep array with "text" and "position" fields), cookingMethod (for oven settings and cooking notes), and optional keywords/recipeCategory
 - Do NOT invent quantities or measurements - if text is unreadable or unclear, mark it as [unclear]
 - Keep original units (cups, grams, teaspoons, etc.) - do not convert
-- If instructions are divided into sections, use HowToSection with itemListElement
-- Reply with ONLY the JSON object - no explanations, no markdown, no extra text
+
+For recipeInstructions:
+- Emit one HowToStep per numbered method line. Do NOT merge multiple steps together. Do NOT return recipeInstructions as a single string.
+- Set "position" to the printed step number (1, 2, 3, etc.) and copy ONLY that step's text into "text"
+- Use HowToSection ONLY when the recipe has named sections (e.g., "Pastry", "Filling", "Sauce"). A plain numbered method list should be a flat array of HowToStep objects.
+- Put oven temperature, shelf position, and general cooking notes in the "cookingMethod" field, NOT inside a step
+- If there are additional notes that don't fit in cookingMethod, create a final HowToStep with name "Note"
+
+Reply with ONLY the JSON object - no explanations, no markdown fences, no extra text.
 
 Example format:
 {
@@ -47,15 +54,23 @@ Example format:
   "recipeInstructions": [
     {
       "@type": "HowToStep",
-      "text": "Mix ingredients"
+      "position": 1,
+      "text": "Mix flour and salt in a bowl"
     },
     {
       "@type": "HowToStep",
-      "text": "Bake at 350°F"
+      "position": 2,
+      "text": "Add water and stir until combined"
+    },
+    {
+      "@type": "HowToStep",
+      "position": 3,
+      "text": "Bake until golden"
     }
   ],
   "recipeCategory": "Dinner",
-  "keywords": "quick, easy"
+  "keywords": "quick, easy",
+  "cookingMethod": "Bake at 350°F (180°C) on middle rack for 30 minutes"
 }
 
 Now, please provide the recipe in this format:`;
@@ -118,7 +133,7 @@ export default function ImportAiScreen() {
       const created = await repo.createRecipe({
         title: data.title,
         description: data.description,
-        notes: null,
+        notes: data.notes,
         servings: data.servings && data.servings > 0 ? data.servings : 4,
         ingredients: data.ingredients.map((line) => parseIngredientLine(line)),
         steps: data.instructions.map((text, order) => ({ id: newId(), text, order })),
