@@ -59,17 +59,32 @@ async function clearTokens(): Promise<void> {
   await deleteSecret('dropbox');
 }
 
-async function storeCodeVerifier(verifier: string): Promise<void> {
-  await saveSecret('dropbox_code_verifier', verifier);
+interface OAuthState {
+  state: string;
+  codeVerifier: string;
+  timestamp: number;
 }
 
-async function getCodeVerifier(): Promise<string | null> {
-  return await readSecret('dropbox_code_verifier');
+async function storeOAuthState(oauthState: OAuthState): Promise<void> {
+  await saveSecret('dropbox_oauth_state', JSON.stringify(oauthState));
 }
 
-async function clearCodeVerifier(): Promise<void> {
-  await deleteSecret('dropbox_code_verifier');
+async function getOAuthState(): Promise<OAuthState | null> {
+  const stored = await readSecret('dropbox_oauth_state');
+  if (!stored) return null;
+  try {
+    return JSON.parse(stored) as OAuthState;
+  } catch {
+    return null;
+  }
 }
+
+async function clearOAuthState(): Promise<void> {
+  await deleteSecret('dropbox_oauth_state');
+}
+
+// Single-flight OAuth completion tracker
+const oauthCompletions = new Map<string, Promise<CloudAuthSession>>();
 
 async function refreshAccessToken(refreshToken: string): Promise<DropboxTokens> {
   const body = new URLSearchParams({
@@ -160,94 +175,120 @@ async function apiRequest(
 }
 
 /**
- * Complete Dropbox OAuth flow with authorization code.
- * Used by both the connect() method and the /auth callback route.
+ * Complete Dropbox OAuth flow with authorization code and state.
+ * Single-flight protected: only one exchange per code.
  * 
  * @param code - Authorization code from Dropbox
+ * @param state - State parameter from Dropbox (must match stored state)
  * @returns CloudAuthSession with account info
  */
-export async function completeDropboxOAuth(code: string): Promise<CloudAuthSession> {
-  if (!DROPBOX_APP_KEY) {
-    throw new Error('Dropbox app key not configured');
+export async function completeDropboxOAuth(code: string, state: string): Promise<CloudAuthSession> {
+  // Single-flight protection: if already processing this code, return that promise
+  const existingCompletion = oauthCompletions.get(code);
+  if (existingCompletion) {
+    return existingCompletion;
   }
 
-  // Retrieve stored code verifier
-  const codeVerifier = await getCodeVerifier();
-  if (!codeVerifier) {
-    throw new Error('Code verifier not found. Please restart the OAuth flow.');
-  }
-
-  try {
-    const tokenBody = new URLSearchParams({
-      grant_type: 'authorization_code',
-      code,
-      client_id: DROPBOX_APP_KEY,
-      redirect_uri: REDIRECT_URI,
-      code_verifier: codeVerifier,
-    });
-
-    const tokenResponse = await fetch(TOKEN_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: tokenBody.toString(),
-    });
-
-    if (!tokenResponse.ok) {
-      const errorText = await tokenResponse.text();
-      throw new Error(`Token exchange failed: ${errorText}`);
-    }
-
-    const tokenData = await tokenResponse.json();
-    const expiresAt = tokenData.expires_in ? Date.now() + tokenData.expires_in * 1000 : undefined;
-
-    // Fetch account info
-    const accountInfo = await (async () => {
-      try {
-        const tempToken = tokenData.access_token;
-        const response = await fetch(`${API_ENDPOINT}/users/get_current_account`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${tempToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(null),
-        });
-        if (response.ok) {
-          const data = await response.json();
-          return {
-            accountId: data.account_id,
-            accountLabel: data.email || data.name?.display_name || 'Dropbox Account',
-          };
-        }
-      } catch {
-        // Ignore account info fetch errors
+  // Create the completion promise
+  const completionPromise = (async () => {
+    try {
+      if (!DROPBOX_APP_KEY) {
+        throw new Error('Dropbox app key not configured');
       }
-      return { accountId: tokenData.account_id, accountLabel: 'Dropbox Account' };
-    })();
 
-    const connectedAt = new Date().toISOString();
+      // Retrieve and validate stored OAuth state
+      const oauthState = await getOAuthState();
+      if (!oauthState) {
+        throw new Error('OAuth state not found. Please restart the OAuth flow.');
+      }
 
-    const tokens: DropboxTokens = {
-      accessToken: tokenData.access_token,
-      refreshToken: tokenData.refresh_token,
-      expiresAt,
-      accountId: accountInfo.accountId,
-      accountLabel: accountInfo.accountLabel,
-      connectedAt,
-    };
+      // Validate state parameter (CSRF protection)
+      if (oauthState.state !== state) {
+        throw new Error('State parameter mismatch. Possible CSRF attack.');
+      }
 
-    await saveTokens(tokens);
-    await clearCodeVerifier();
+      // Check if state is too old (more than 10 minutes)
+      if (Date.now() - oauthState.timestamp > 10 * 60 * 1000) {
+        await clearOAuthState();
+        throw new Error('OAuth session expired. Please try connecting again.');
+      }
 
-    return {
-      providerId: 'dropbox',
-      accountLabel: accountInfo.accountLabel,
-      connectedAt,
-    };
-  } catch (error) {
-    await clearCodeVerifier();
-    throw error;
-  }
+      const tokenBody = new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        client_id: DROPBOX_APP_KEY,
+        redirect_uri: REDIRECT_URI,
+        code_verifier: oauthState.codeVerifier,
+      });
+
+      const tokenResponse = await fetch(TOKEN_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: tokenBody.toString(),
+      });
+
+      if (!tokenResponse.ok) {
+        const errorText = await tokenResponse.text();
+        throw new Error(`Token exchange failed: ${errorText}`);
+      }
+
+      const tokenData = await tokenResponse.json();
+      const expiresAt = tokenData.expires_in ? Date.now() + tokenData.expires_in * 1000 : undefined;
+
+      // Fetch account info
+      const accountInfo = await (async () => {
+        try {
+          const tempToken = tokenData.access_token;
+          const response = await fetch(`${API_ENDPOINT}/users/get_current_account`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${tempToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(null),
+          });
+          if (response.ok) {
+            const data = await response.json();
+            return {
+              accountId: data.account_id,
+              accountLabel: data.email || data.name?.display_name || 'Dropbox Account',
+            };
+          }
+        } catch {
+          // Ignore account info fetch errors
+        }
+        return { accountId: tokenData.account_id, accountLabel: 'Dropbox Account' };
+      })();
+
+      const connectedAt = new Date().toISOString();
+
+      const tokens: DropboxTokens = {
+        accessToken: tokenData.access_token,
+        refreshToken: tokenData.refresh_token,
+        expiresAt,
+        accountId: accountInfo.accountId,
+        accountLabel: accountInfo.accountLabel,
+        connectedAt,
+      };
+
+      await saveTokens(tokens);
+      await clearOAuthState();
+
+      return {
+        providerId: 'dropbox' as const,
+        accountLabel: accountInfo.accountLabel,
+        connectedAt,
+      };
+    } finally {
+      // Remove from in-flight map after settling
+      oauthCompletions.delete(code);
+    }
+  })();
+
+  // Store the promise so concurrent calls return the same result
+  oauthCompletions.set(code, completionPromise);
+
+  return completionPromise;
 }
 
 export const dropboxAdapter: CloudStorageAdapter = {
@@ -280,11 +321,17 @@ export const dropboxAdapter: CloudStorageAdapter = {
       );
     }
 
+    // Generate PKCE parameters and state
     const codeVerifier = await generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
+    const state = await generateState();
 
-    // Store code verifier for the auth callback route to use (if deep link occurs)
-    await storeCodeVerifier(codeVerifier);
+    // Store OAuth state for the auth callback route to use (if deep link occurs)
+    await storeOAuthState({
+      state,
+      codeVerifier,
+      timestamp: Date.now(),
+    });
 
     // Omit `scope` so Dropbox grants all permissions enabled on the app.
     const authParams: Record<string, string> = {
@@ -293,6 +340,7 @@ export const dropboxAdapter: CloudStorageAdapter = {
       redirect_uri: REDIRECT_URI,
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
+      state,
       token_access_type: 'offline',
     };
     const authUrl = `${AUTH_ENDPOINT}?${new URLSearchParams(authParams).toString()}`;
@@ -300,19 +348,26 @@ export const dropboxAdapter: CloudStorageAdapter = {
     const result = await WebBrowser.openAuthSessionAsync(authUrl, REDIRECT_URI);
 
     if (result.type !== 'success') {
-      await clearCodeVerifier();
+      await clearOAuthState();
       throw new Error('OAuth flow cancelled or failed');
     }
 
     const params = new URLSearchParams(result.url.split('?')[1]);
     const code = params.get('code');
+    const returnedState = params.get('state');
+    
     if (!code) {
-      await clearCodeVerifier();
+      await clearOAuthState();
       throw new Error('No authorization code received');
     }
 
-    // Complete OAuth flow with shared function
-    return await completeDropboxOAuth(code);
+    if (!returnedState) {
+      await clearOAuthState();
+      throw new Error('No state parameter received');
+    }
+
+    // Complete OAuth flow with shared function (single-flight protected)
+    return await completeDropboxOAuth(code, returnedState);
   },
 
   async disconnect() {
@@ -450,6 +505,11 @@ export const dropboxAdapter: CloudStorageAdapter = {
     return { recipePath, photoPaths };
   },
 };
+
+async function generateState(): Promise<string> {
+  const randomBytes = await Crypto.getRandomBytesAsync(32);
+  return base64URLEncode(randomBytes);
+}
 
 async function generateCodeVerifier(): Promise<string> {
   const randomBytes = await Crypto.getRandomBytesAsync(32);

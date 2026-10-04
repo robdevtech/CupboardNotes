@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, Alert, Platform, ActivityIndicator } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { listAdapters } from '../src/cloud/registry';
 import { syncAllStores } from '../src/cloud/syncManager';
 import type { CloudProviderId } from '../src/cloud/CloudStorageAdapter';
@@ -40,6 +41,14 @@ export default function SettingsScreen() {
   useEffect(() => {
     void loadConnectionStates();
   }, [loadConnectionStates]);
+
+  // Refresh connection states when screen comes into focus
+  // (e.g., after OAuth callback redirects back)
+  useFocusEffect(
+    useCallback(() => {
+      void loadConnectionStates();
+    }, [loadConnectionStates])
+  );
 
   const onConnect = async (id: CloudProviderId) => {
     const adapter = adapters.find((a) => a.id === id);

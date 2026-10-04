@@ -4,13 +4,15 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useTheme, space } from '../src/ui/theme';
 import { completeDropboxOAuth } from '../src/cloud/providers/dropbox';
+import { listAdapters } from '../src/cloud/registry';
 
 /**
  * OAuth callback route for Dropbox authentication.
  * Handles both cupboardnotes://auth and exp://.../--/auth redirects.
  * 
  * Called when Dropbox redirects back with authorization code.
- * Completes the PKCE token exchange and redirects to Settings.
+ * Completes the PKCE token exchange only if not already handled by connect().
+ * Single-flight protected: if connect() already processing, awaits that result.
  */
 export default function AuthCallbackScreen() {
   const router = useRouter();
@@ -24,8 +26,17 @@ export default function AuthCallbackScreen() {
 
     const handleAuth = async () => {
       try {
-        // Extract code from query params
+        // Check if already connected (connect() may have completed)
+        const dropboxAdapter = listAdapters().find((a) => a.id === 'dropbox');
+        if (dropboxAdapter && (await dropboxAdapter.isConnected())) {
+          // Already connected, just redirect
+          router.replace('/settings');
+          return;
+        }
+
+        // Extract code and state from query params
         const code = Array.isArray(params.code) ? params.code[0] : params.code;
+        const state = Array.isArray(params.state) ? params.state[0] : params.state;
         
         if (!code) {
           setError('No authorization code received');
@@ -33,8 +44,15 @@ export default function AuthCallbackScreen() {
           return;
         }
 
-        // Complete OAuth flow with stored code verifier
-        await completeDropboxOAuth(code);
+        if (!state) {
+          setError('No state parameter received');
+          setTimeout(() => router.replace('/settings'), 2000);
+          return;
+        }
+
+        // Complete OAuth flow (single-flight protected)
+        // If connect() is already handling it, this will await that result
+        await completeDropboxOAuth(code, state);
 
         // Redirect to Settings after brief delay
         setTimeout(() => router.replace('/settings'), 500);
@@ -45,7 +63,7 @@ export default function AuthCallbackScreen() {
     };
 
     void handleAuth();
-  }, [params.code, router]);
+  }, [params.code, params.state, router]);
 
   const styles = StyleSheet.create({
     container: {
