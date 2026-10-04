@@ -289,7 +289,7 @@ Let me know if you need any modifications!`;
     expect(result.servings).toBe(6);
   });
 
-  it('preserves original units and measurements', () => {
+  it('preserves quantities while normalizing unit names', () => {
     const input = JSON.stringify({
       '@type': 'Recipe',
       name: 'Unit Test',
@@ -306,7 +306,8 @@ Let me know if you need any modifications!`;
 
     expect(result.ingredients[0]).toBe('250g flour');
     expect(result.ingredients[1]).toBe('2 cups milk');
-    expect(result.ingredients[2]).toBe('1 tablespoon vanilla');
+    expect(result.ingredients[2]).toBe('1 tbsp vanilla');  // normalized
+    expect(result.ingredients[3]).toBe('3 whole eggs');
   });
 
   it('handles real-world AI response with extra formatting', () => {
@@ -377,10 +378,10 @@ This recipe should work well for you! Let me know if you need any adjustments.`;
     const input = `Here's the recipe in JSON format:
 
 \`\`\`json
-{"@context":"https://schema.org","@type":"Recipe","name":"Strawberry Tartlets","description":"Tartlet cases of biscuit pastry or rich short pastry filled with strawberries, glazed with thickened fruit juice, and decorated with whipped cream.","recipeYield":"[unclear]","prepTime":"[unclear]","cookTime":"PT20M","totalTime":"[unclear]","recipeIngredient":["200 g Biscuit Pastry (page 309) or Rich Short Pastry (page 308)","200 g fresh Strawberries or 1 pkt. frozen Strawberries","125 ml Cream","125 ml Fruit Juice","Colouring if required","2 level teaspoonfuls Arrowroot or Sachet of quick setting gel","1 tablespoonful sugar"],"recipeInstructions":[{"@type":"HowToStep","position":1,"text":"To make fruit juice: soak fresh strawberries with 1 tablespoonful sugar until juice flows. Make up if necessary to 125 ml with water."},{"@type":"HowToStep","position":2,"text":"Line patty tins with pastry, fork the base."},{"@type":"HowToStep","position":3,"text":"Bake until a very pale brown. Cool."},{"@type":"HowToStep","position":4,"text":"Fill up cases with prepared fruit – halved if necessary."},{"@type":"HowToStep","position":5,"text":"Thicken the fruit juice with blended arrowroot and cook for 1–2 minutes or use a sachet of quick setting gel."},{"@type":"HowToStep","position":6,"text":"Glaze fruit, allow to cool and decorate with whipped cream."}],"recipeCategory":"Dessert","keywords":"strawberry tartlets, pastry","cookingMethod":"Bake at 190°C, No. 5, one-third from the top, 15–20 minutes. Note: A little cream spread on bottom of case helps to prevent the pastry softening."}
+{"@context":"https://schema.org","@type":"Recipe","name":"Strawberry Tartlets","description":"Tartlet cases of biscuit pastry or rich short pastry filled with strawberries, glazed with thickened fruit juice, and decorated with whipped cream.","recipeYield":"[unclear]","prepTime":"[unclear]","cookTime":"PT20M","totalTime":"[unclear]","recipeIngredient":["200 g biscuit pastry (page 309) or rich short pastry (page 308)","200 g fresh strawberries or 1 packet frozen strawberries","125 ml cream","125 ml fruit juice","Colouring if required","2 level tsp arrowroot or sachet of quick setting gel","1 tbsp sugar"],"recipeInstructions":[{"@type":"HowToStep","position":1,"text":"To make fruit juice: soak fresh strawberries with 1 tbsp sugar until juice flows. Make up if necessary to 125 ml with water."},{"@type":"HowToStep","position":2,"text":"Line patty tins with pastry, fork the base."},{"@type":"HowToStep","position":3,"text":"Bake until a very pale brown. Cool."},{"@type":"HowToStep","position":4,"text":"Fill up cases with prepared fruit – halved if necessary."},{"@type":"HowToStep","position":5,"text":"Thicken the fruit juice with blended arrowroot and cook for 1–2 minutes or use a sachet of quick setting gel."},{"@type":"HowToStep","position":6,"text":"Glaze fruit, allow to cool and decorate with whipped cream."}],"recipeCategory":"Dessert","keywords":"strawberry tartlets, pastry","cookingMethod":"Bake at 190°C, No. 5, one-third from the top, 15–20 minutes. Note: A little cream spread on bottom of case helps to prevent the pastry softening.","referencedRecipes":[{"name":"Biscuit Pastry","page":"309"},{"name":"Rich Short Pastry","page":"308"}]}
 \`\`\`
 
-Hope this helps!`;
+Would you like me to import the Biscuit Pastry (page 309) and Rich Short Pastry (page 308) recipes as well?`;
 
     const result = parseAiRecipeResponse(input);
 
@@ -407,5 +408,47 @@ Hope this helps!`;
     // cookingMethod should be extracted as notes
     expect(result.notes).toContain('Bake at 190°C');
     expect(result.notes).toContain('Note: A little cream spread on bottom of case');
+    
+    // Ingredients should have ml abbreviations (normalized)
+    expect(result.ingredients).toContain('125 ml cream');
+    expect(result.ingredients).toContain('125 ml fruit juice');
+    expect(result.ingredients).toContain('2 tsp arrowroot or sachet of quick setting gel');
+    expect(result.ingredients).toContain('1 tbsp sugar');
+    
+    // Referenced recipes should be extracted
+    expect(result.referencedRecipes).toHaveLength(2);
+    expect(result.referencedRecipes[0]).toEqual({ name: 'Biscuit Pastry', page: '309' });
+    expect(result.referencedRecipes[1]).toEqual({ name: 'Rich Short Pastry', page: '308' });
+  });
+
+  it('normalizes verbose unit names to abbreviations', () => {
+    const input = JSON.stringify({
+      '@type': 'Recipe',
+      name: 'Unit Test Recipe',
+      recipeIngredient: [
+        '250 millilitres milk',
+        '2 litres water',
+        '500 grams flour',
+        '1 kilogram sugar',
+        '3 teaspoons vanilla',
+        '2 tablespoons butter',
+        '8 ounces cheese',
+        '1 pound beef',
+        '2 level teaspoonfuls salt',
+      ],
+      recipeInstructions: [{ '@type': 'HowToStep', text: 'Mix all' }],
+    });
+
+    const result = parseAiRecipeResponse(input);
+
+    expect(result.ingredients[0]).toBe('250 ml milk');
+    expect(result.ingredients[1]).toBe('2 l water');
+    expect(result.ingredients[2]).toBe('500 g flour');
+    expect(result.ingredients[3]).toBe('1 kg sugar');
+    expect(result.ingredients[4]).toBe('3 tsp vanilla');
+    expect(result.ingredients[5]).toBe('2 tbsp butter');
+    expect(result.ingredients[6]).toBe('8 oz cheese');
+    expect(result.ingredients[7]).toBe('1 lb beef');
+    expect(result.ingredients[8]).toBe('2 tsp salt');
   });
 });

@@ -3,6 +3,11 @@
  * Own TypeScript — concepts from schema.org, not Mealie source.
  */
 
+export interface RecipeReference {
+  name: string;
+  page: string | null;
+}
+
 export interface JsonLdRecipe {
   title: string;
   description: string | null;
@@ -18,6 +23,8 @@ export interface JsonLdRecipe {
   prepTimeMinutes: number | null;
   cookTimeMinutes: number | null;
   totalTimeMinutes: number | null;
+  /** Referenced recipes from cookbook cross-references */
+  referencedRecipes: RecipeReference[];
 }
 
 function asArray<T>(v: T | T[] | undefined | null): T[] {
@@ -27,6 +34,29 @@ function asArray<T>(v: T | T[] | undefined | null): T[] {
 
 function stripHtml(s: string): string {
   return s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Normalize common unit words to standard abbreviations.
+ * Safety net for when AI doesn't follow prompt instructions.
+ */
+function normalizeUnits(text: string): string {
+  return text
+    .replace(/\bmillilitres?\b/gi, 'ml')
+    .replace(/\bmilliliters?\b/gi, 'ml')
+    .replace(/\bmls\b/gi, 'ml')
+    .replace(/\blitres?\b/gi, 'l')
+    .replace(/\bliters?\b/gi, 'l')
+    .replace(/\bgrams?\b/gi, 'g')
+    .replace(/\bgrammes?\b/gi, 'g')
+    .replace(/\bkilograms?\b/gi, 'kg')
+    .replace(/\bkilogrammes?\b/gi, 'kg')
+    .replace(/\bteaspoon(?:ful)?s?\b/gi, 'tsp')
+    .replace(/\btablespoon(?:ful)?s?\b/gi, 'tbsp')
+    .replace(/\bounces?\b/gi, 'oz')
+    .replace(/\bpounds?\b/gi, 'lb')
+    // Remove "level" modifier before units
+    .replace(/\blevel\s+(tsp|tbsp)\b/gi, '$1');
 }
 
 function parseIsoDuration(iso: unknown): number | null {
@@ -115,7 +145,7 @@ function normalizeRecipe(node: Record<string, unknown>, pageUrl?: string): JsonL
   if (!title) return null;
 
   const ingredients = asArray(node.recipeIngredient)
-    .map((x) => stripHtml(String(x)))
+    .map((x) => normalizeUnits(stripHtml(String(x))))
     .filter(Boolean);
 
   const instructionSteps = extractInstructions(node.recipeInstructions);
@@ -146,6 +176,24 @@ function normalizeRecipe(node: Record<string, unknown>, pageUrl?: string): JsonL
     }
   }
 
+  // Extract referenced recipes
+  const referencedRecipes: RecipeReference[] = [];
+  const refs = node.referencedRecipes;
+  if (Array.isArray(refs)) {
+    for (const ref of refs) {
+      if (ref && typeof ref === 'object') {
+        const refObj = ref as Record<string, unknown>;
+        const name = String(refObj.name ?? '').trim();
+        if (name) {
+          referencedRecipes.push({
+            name,
+            page: refObj.page ? String(refObj.page) : null,
+          });
+        }
+      }
+    }
+  }
+
   return {
     title,
     description: node.description ? stripHtml(String(node.description)) : null,
@@ -158,6 +206,7 @@ function normalizeRecipe(node: Record<string, unknown>, pageUrl?: string): JsonL
     prepTimeMinutes: parseIsoDuration(node.prepTime),
     cookTimeMinutes: parseIsoDuration(node.cookTime),
     totalTimeMinutes: parseIsoDuration(node.totalTime),
+    referencedRecipes,
   };
 }
 

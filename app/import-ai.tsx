@@ -26,7 +26,9 @@ Requirements:
 - Use the Schema.org Recipe format (https://schema.org/Recipe)
 - Include: name, description, recipeYield, prepTime/cookTime/totalTime (as ISO 8601 durations, e.g., "PT30M"), recipeIngredient (array of strings), recipeInstructions (as HowToStep array with "text" and "position" fields), cookingMethod (for oven settings and cooking notes), and optional keywords/recipeCategory
 - Do NOT invent quantities or measurements - if text is unreadable or unclear, mark it as [unclear]
-- Keep original units (cups, grams, teaspoons, etc.) - do not convert
+- Keep original units but use standard abbreviations: ml, l, g, kg, tsp, tbsp, oz, lb, °C, °F (not "millilitres", "level teaspoonfuls", etc.)
+- Write ingredient lines as "quantity unit ingredient, note" with sentence-case ingredient names (not Title Case)
+- Remove ambiguous shorthand like 'pkt.' - write out 'packet' or be specific
 
 For recipeInstructions:
 - Emit one HowToStep per numbered method line. Do NOT merge multiple steps together. Do NOT return recipeInstructions as a single string.
@@ -34,6 +36,11 @@ For recipeInstructions:
 - Use HowToSection ONLY when the recipe has named sections (e.g., "Pastry", "Filling", "Sauce"). A plain numbered method list should be a flat array of HowToStep objects.
 - Put oven temperature, shelf position, and general cooking notes in the "cookingMethod" field, NOT inside a step
 - If there are additional notes that don't fit in cookingMethod, create a final HowToStep with name "Note"
+
+Referenced recipes in the book:
+- When an ingredient or step refers to another recipe (e.g., "Biscuit Pastry (page 309)"), keep it in the ingredient line
+- Add a top-level "referencedRecipes" array: [{"name": "Recipe Name", "page": "123"}]
+- After the JSON, ask the user to send those pages too so you can import the complete set
 
 Reply with ONLY the JSON object - no explanations, no markdown fences, no extra text.
 

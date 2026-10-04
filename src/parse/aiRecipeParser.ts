@@ -22,7 +22,7 @@ import { extractRecipeFromJsonLd, type JsonLdRecipe } from './jsonLd';
  * - Bare JSON objects
  * - Trailing commas
  * - Smart quotes (convert to straight quotes, handling nested cases)
- * - Extra text before/after JSON
+ * - Extra text before/after JSON (including trailing questions)
  */
 function extractJson(response: string): string | null {
   // Try to extract from markdown code fence first
