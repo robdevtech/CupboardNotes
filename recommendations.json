@@ -1,0 +1,39 @@
+{
+  "version": "cupboard-notes/recommendations/v1",
+  "updatedAt": "2026-09-22T03:40:00Z",
+  "season": "Fall 2026 (Updated)",
+  "recommendations": [
+    {
+      "id": "rec-1",
+      "title": "Perfect Chocolate Chip Cookies",
+      "description": "Crispy edges, chewy center. The definitive chocolate chip cookie recipe.",
+      "url": "https://tasty.co/recipe/perfect-chocolate-chip-cookies",
+      "category": "dessert",
+      "tags": ["dessert", "party"]
+    },
+    {
+      "id": "rec-2",
+      "title": "Classic Roast Chicken",
+      "description": "Golden skin, juicy meat. A foolproof weeknight dinner classic.",
+      "url": "https://tasty.co/recipe/roast-chicken",
+      "category": "dinner",
+      "tags": ["dinner"]
+    },
+    {
+      "id": "rec-3",
+      "title": "Overnight Oats",
+      "description": "Prep tonight, grab breakfast tomorrow. Customizable and healthy.",
+      "url": "https://www.food.com/recipe/overnight-oats-534459",
+      "category": "breakfast",
+      "tags": ["breakfast"]
+    },
+    {
+      "id": "rec-4",
+      "title": "Simple Garlic Pasta",
+      "description": "Five ingredients, 20 minutes. Perfect for busy weeknights.",
+      "url": "https://www.food.com/recipe/simple-garlic-pasta-208217",
+      "category": "dinner",
+      "tags": ["dinner", "lunch"]
+    }
+  ]
+}

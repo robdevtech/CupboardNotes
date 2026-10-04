@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
 import Constants from 'expo-constants';
 import { importRecipeFromUrl } from '../src/parse/htmlFetch';
+import { importRecipeFromJson } from '../src/storage/importRecipe';
 import { parseIngredientLine } from '../src/parse/ingredientParse';
 import { newId } from '../src/domain/ids';
 import { photosFromImportUrls } from '../src/storage/photos';
@@ -65,9 +66,34 @@ export default function ImportScreen() {
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [pasteMode, setPasteMode] = useState(false);
+  const [jsonMode, setJsonMode] = useState(false);
+  const [jsonInput, setJsonInput] = useState('');
   const [pasteTitle, setPasteTitle] = useState('');
   const [pasteIngredients, setPasteIngredients] = useState('');
   const [pasteSteps, setPasteSteps] = useState('');
+
+  const onImportJson = async () => {
+    if (!jsonInput.trim()) {
+      Alert.alert('Error', 'Please paste a recipe JSON');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const recipe = importRecipeFromJson(jsonInput);
+      // Generate new ID to avoid conflicts
+      const newRecipe = { ...recipe, id: newId(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      await repo.createRecipe(newRecipe);
+      await refresh();
+      Alert.alert('Success', `Imported "${newRecipe.title}"`, [
+        { text: 'OK', onPress: () => router.replace(`/recipe/${newRecipe.id}`) },
+      ]);
+    } catch (e) {
+      Alert.alert('Import failed', e instanceof Error ? e.message : 'Unknown error');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const onImport = async () => {
     setBusy(true);
@@ -169,9 +195,34 @@ export default function ImportScreen() {
         )}
       </Pressable>
 
-      <Pressable onPress={() => setPasteMode((v) => !v)} style={styles.linkBtn}>
-        <Text style={styles.link}>{pasteMode ? 'Hide paste form' : 'Paste / enter manually'}</Text>
-      </Pressable>
+      <View style={styles.linksRow}>
+        <Pressable onPress={() => setJsonMode((v) => !v)} style={styles.linkBtn}>
+          <Text style={styles.link}>{jsonMode ? 'Hide JSON import' : 'Import from friend (JSON)'}</Text>
+        </Pressable>
+        <Pressable onPress={() => setPasteMode((v) => !v)} style={styles.linkBtn}>
+          <Text style={styles.link}>{pasteMode ? 'Hide paste form' : 'Paste / enter manually'}</Text>
+        </Pressable>
+      </View>
+
+      {jsonMode ? (
+        <View style={styles.paste}>
+          <Text style={styles.label}>Cupboard Notes JSON</Text>
+          <Text style={styles.help}>
+            Paste a recipe JSON shared from another Cupboard Notes user.
+          </Text>
+          <TextInput
+            style={StyleSheet.flatten([styles.input, styles.tall])}
+            value={jsonInput}
+            onChangeText={setJsonInput}
+            placeholder='{"format":"cupboard-notes/v1",...}'
+            placeholderTextColor={colors.textMuted}
+            multiline
+          />
+          <Pressable style={styles.btn} onPress={() => void onImportJson()} disabled={busy}>
+            <Text style={styles.btnText}>Import JSON</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {pasteMode ? (
         <View style={styles.paste}>
@@ -222,7 +273,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   btnDisabled: { opacity: 0.6 },
   btnText: { color: colors.onPrimary, fontWeight: '700' },
-  linkBtn: { marginTop: space.lg, alignItems: 'center' },
+  linksRow: { marginTop: space.lg, gap: space.sm },
+  linkBtn: { alignItems: 'center', paddingVertical: space.sm },
   link: { color: colors.primary, fontWeight: '600' },
   paste: { marginTop: space.md },
 });

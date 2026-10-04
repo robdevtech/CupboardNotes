@@ -19,6 +19,7 @@ export interface ThemeColors {
   success: string;
   onPrimary: string;
   shadow: string;
+  error: string;
 }
 
 const lightColors: ThemeColors = {
@@ -36,6 +37,7 @@ const lightColors: ThemeColors = {
   success: '#2F855A',
   onPrimary: '#FFFFFF',
   shadow: '#6B4F35',
+  error: '#B42318',
 };
 
 const darkColors: ThemeColors = {
@@ -53,6 +55,7 @@ const darkColors: ThemeColors = {
   success: '#7ACB9B',
   onPrimary: '#2B1A0D',
   shadow: '#000000',
+  error: '#F58A83',
 };
 
 export const space = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 };
@@ -75,12 +78,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // 3. Listen to Appearance changes to update when system theme changes
   const [systemScheme, setSystemScheme] = useState<'light' | 'dark' | null>(() => {
     // Initialize with hookScheme if available, otherwise use Appearance API
-    return hookScheme ?? Appearance.getColorScheme();
+    const scheme = hookScheme ?? Appearance.getColorScheme();
+    // Filter out 'unspecified' which isn't a valid theme
+    return scheme === 'unspecified' ? null : scheme;
   });
 
   // Update systemScheme when hookScheme changes (normal React Native path)
   useEffect(() => {
-    if (hookScheme !== null) {
+    if (hookScheme !== null && hookScheme !== 'unspecified') {
       setSystemScheme(hookScheme);
     }
   }, [hookScheme]);
@@ -89,7 +94,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // This ensures we catch changes even if useColorScheme() doesn't update
   useEffect(() => {
     const subscription = Appearance.addChangeListener(({ colorScheme }) => {
-      setSystemScheme(colorScheme);
+      // Filter out 'unspecified' which isn't a valid theme
+      setSystemScheme(colorScheme === 'unspecified' ? null : colorScheme);
     });
     return () => subscription.remove();
   }, []);

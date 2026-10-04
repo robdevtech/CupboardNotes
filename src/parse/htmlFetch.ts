@@ -16,7 +16,7 @@ export async function fetchHtml(url: string): Promise<string> {
     },
   });
   if (!res.ok) {
-    throw new Error(`Fetch failed: HTTP ${res.status}`);
+    throw new Error(`Fetch failed: HTTP ${res.status} for ${url}`);
   }
   return await res.text();
 }

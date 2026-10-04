@@ -9,7 +9,8 @@ export type CloudProviderId =
   | 'iCloud'
   | 'dropbox'
   | 'oneDrive'
-  | 'box';
+  | 'box'
+  | 'local';
 
 export interface CloudFileInfo {
   path: string;

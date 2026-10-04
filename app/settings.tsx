@@ -1,6 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, Switch, Alert, Platform } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, Pressable, StyleSheet, ScrollView, Alert, Platform, ActivityIndicator } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { listAdapters } from '../src/cloud/registry';
+import { syncAllStores } from '../src/cloud/syncManager';
 import type { CloudProviderId } from '../src/cloud/CloudStorageAdapter';
 import { useSettingsStore } from '../src/store/settingsStore';
 import { useTheme, space, type ThemeColors, type ThemeMode } from '../src/ui/theme';
@@ -9,22 +11,44 @@ export default function SettingsScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const adapters = listAdapters();
-  const { enabledProviders, toggleProvider, themePreference, setThemePreference } = useSettingsStore();
+  const { themePreference, setThemePreference } = useSettingsStore();
   const [connected, setConnected] = useState<Record<string, boolean>>({});
+  const [sessions, setSessions] = useState<Record<string, { accountLabel?: string } | null>>({});
+  const [syncing, setSyncing] = useState(false);
+
+  const loadConnectionStates = useCallback(async () => {
+    const connMap: Record<string, boolean> = {};
+    const sessMap: Record<string, { accountLabel?: string } | null> = {};
+    for (const a of adapters) {
+      try {
+        const isConn = await a.isConnected();
+        connMap[a.id] = isConn;
+        if (isConn) {
+          const session = await a.getSession();
+          sessMap[a.id] = session;
+        } else {
+          sessMap[a.id] = null;
+        }
+      } catch {
+        connMap[a.id] = false;
+        sessMap[a.id] = null;
+      }
+    }
+    setConnected(connMap);
+    setSessions(sessMap);
+  }, [adapters]);
 
   useEffect(() => {
-    (async () => {
-      const map: Record<string, boolean> = {};
-      for (const a of adapters) {
-        try {
-          map[a.id] = await a.isConnected();
-        } catch {
-          map[a.id] = false;
-        }
-      }
-      setConnected(map);
-    })();
-  }, [adapters]);
+    void loadConnectionStates();
+  }, [loadConnectionStates]);
+
+  // Refresh connection states when screen comes into focus
+  // (e.g., after OAuth callback redirects back)
+  useFocusEffect(
+    useCallback(() => {
+      void loadConnectionStates();
+    }, [loadConnectionStates])
+  );
 
   const onConnect = async (id: CloudProviderId) => {
     const adapter = adapters.find((a) => a.id === id);
@@ -39,13 +63,25 @@ export default function SettingsScreen() {
       return;
     }
     try {
-      await adapter.connect();
-      setConnected((c) => ({ ...c, [id]: true }));
-      if (!enabledProviders.includes(id)) toggleProvider(id);
-      Alert.alert(
-        'Connected (stub)',
-        `${adapter.displayName}: Milestone 1 uses a stub session. Real OAuth lands in Milestone 2.\n\n${adapter.authNotes}`
-      );
+      const session = await adapter.connect();
+      await loadConnectionStates(); // Refresh all states
+      
+      if (id === 'local') {
+        Alert.alert(
+          'Local Storage Connected',
+          `Recipes will be stored in your app's Documents directory.\n\nLocation: ${session.accountLabel}\n\nThis folder syncs with other connected storage providers using last-write-wins merge.`
+        );
+      } else if (id === 'dropbox') {
+        Alert.alert(
+          'Dropbox Connected',
+          `Successfully connected to Dropbox as ${session.accountLabel}.\n\nRecipes will sync to /Cupboard Notes folder in your Dropbox using last-write-wins merge.`
+        );
+      } else {
+        Alert.alert(
+          'Connected (stub)',
+          `${adapter.displayName}: OAuth not yet implemented.\n\n${adapter.authNotes}`
+        );
+      }
     } catch (e) {
       Alert.alert(
         adapter.displayName,
@@ -57,17 +93,68 @@ export default function SettingsScreen() {
   const onDisconnect = async (id: CloudProviderId) => {
     const adapter = adapters.find((a) => a.id === id);
     if (!adapter) return;
-    await adapter.disconnect();
-    setConnected((c) => ({ ...c, [id]: false }));
+    
+    Alert.alert(
+      `Disconnect ${adapter.displayName}?`,
+      'Your recipes will remain in local SQLite. This only disconnects this storage provider.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Disconnect',
+          style: 'destructive',
+          onPress: async () => {
+            await adapter.disconnect();
+            await loadConnectionStates(); // Refresh all states
+          },
+        },
+      ]
+    );
+  };
+
+  const onSync = async () => {
+    setSyncing(true);
+    try {
+      const result = await syncAllStores();
+      
+      if (result.errors.length > 0) {
+        Alert.alert(
+          'Sync completed with errors',
+          `Pulled: ${result.pulledCount}, Pushed: ${result.pushedCount}, Conflicts: ${result.conflictsResolved}\n\nErrors:\n${result.errors.join('\n')}`
+        );
+      } else {
+        Alert.alert(
+          'Sync complete',
+          `✓ Pulled ${result.pulledCount} recipes\n✓ Pushed ${result.pushedCount} recipes\n✓ Resolved ${result.conflictsResolved} conflicts`
+        );
+      }
+    } catch (e) {
+      Alert.alert('Sync failed', e instanceof Error ? e.message : 'Unknown error');
+    } finally {
+      setSyncing(false);
+    }
   };
 
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
       <Text style={styles.intro}>
-        Offline SQLite is the source of truth. Cloud sync is optional and additive — your own
-        Dropbox via OAuth. No managed server. Additional cloud providers (Google Drive, iCloud,
-        OneDrive, Box) are planned for future releases.
+        Offline SQLite is the source of truth. Storage sync is optional and additive. Connect Local
+        Folder to keep recipes in your device's Documents directory, or Dropbox for
+        cloud storage. Connected providers sync automatically. Multi-store sync uses last-write-wins merge. No managed server.
       </Text>
+
+      {Object.values(connected).some(Boolean) && (
+        <Pressable
+          style={StyleSheet.flatten([styles.syncBtn, syncing && styles.syncBtnDisabled])}
+          onPress={() => void onSync()}
+          disabled={syncing}
+        >
+          {syncing ? (
+            <ActivityIndicator color={colors.onPrimary} />
+          ) : (
+            <Text style={styles.syncBtnText}>Sync All Stores</Text>
+          )}
+        </Pressable>
+      )}
 
       <View style={styles.themeCard}>
         <Text style={styles.themeTitle}>Appearance</Text>
@@ -88,40 +175,53 @@ export default function SettingsScreen() {
       </View>
 
       {adapters.map((a) => {
-        const enabled = enabledProviders.includes(a.id);
         const isOn = !!connected[a.id];
+        const session = sessions[a.id];
+        const isLocal = a.id === 'local';
         return (
           <View key={a.id} style={StyleSheet.flatten([styles.card, !a.available && styles.cardDisabled])}>
             <View style={styles.cardHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.name}>{a.displayName}</Text>
-                <Text style={styles.status}>
-                  {!a.available
-                    ? 'Unavailable on this platform'
-                    : isOn
-                      ? 'Stub-connected'
-                      : 'Not connected'}
+              <Text style={styles.name}>{a.displayName}</Text>
+              <Text style={styles.status}>
+                {!a.available
+                  ? 'Unavailable on this platform'
+                  : isOn
+                    ? 'Connected'
+                    : 'Not connected'}
+              </Text>
+            </View>
+            
+            {isOn && session?.accountLabel ? (
+              <View style={styles.connectedInfo}>
+                <Text style={styles.connectedLabel}>
+                  {isLocal ? '📁 Storage location:' : '👤 Connected as:'}
+                </Text>
+                <Text style={styles.connectedValue} numberOfLines={2}>
+                  {session.accountLabel}
                 </Text>
               </View>
-              <Switch
-                value={enabled}
-                disabled={!a.available}
-                trackColor={{ false: colors.chip, true: colors.primarySoft }}
-                thumbColor={enabled ? colors.primary : colors.textMuted}
-                onValueChange={() => toggleProvider(a.id)}
-              />
-            </View>
-            <Text style={styles.notes}>{a.authNotes}</Text>
+            ) : null}
+            
+            {!isOn && <Text style={styles.notes}>{a.authNotes}</Text>}
+            
             <View style={styles.row}>
               <Pressable
-                style={styles.btn}
+                style={StyleSheet.flatten([styles.btn, isOn && styles.btnConnected])}
                 onPress={() => void onConnect(a.id)}
-                disabled={!a.available}
+                disabled={!a.available || isOn}
               >
-                <Text style={styles.btnText}>Connect</Text>
+                <Text style={StyleSheet.flatten([styles.btnText, isOn && styles.btnConnectedText])}>
+                  {isOn ? '✓ Connected' : 'Connect'}
+                </Text>
               </Pressable>
-              <Pressable style={styles.btnSecondary} onPress={() => void onDisconnect(a.id)}>
-                <Text style={styles.btnSecondaryText}>Disconnect</Text>
+              <Pressable 
+                style={StyleSheet.flatten([styles.btnSecondary, !isOn && styles.btnSecondaryDisabled])} 
+                onPress={() => void onDisconnect(a.id)}
+                disabled={!isOn}
+              >
+                <Text style={StyleSheet.flatten([styles.btnSecondaryText, !isOn && styles.btnSecondaryTextDisabled])}>
+                  Disconnect
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -129,8 +229,9 @@ export default function SettingsScreen() {
       })}
 
       <Text style={styles.footer}>
-        Photo files sync with recipe JSON under /Cupboard Notes/&#123;recipeId&#125;/ via CloudStorageAdapter.
-        Dropbox is the currently supported provider; additional cloud storage options coming soon.
+        Recipe bundles are stored as /Cupboard Notes/&#123;recipeId&#125;/recipe.json + photos/* in each
+        connected store. Multi-store sync merges by newest updatedAt (last-write-wins). Other cloud
+        providers (Google Drive, iCloud, OneDrive, Box) are stubbed for future OAuth implementation.
       </Text>
     </ScrollView>
   );
@@ -171,7 +272,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: space.md,
   },
   cardDisabled: { opacity: 0.7 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  cardHeader: { marginBottom: space.sm },
   name: { fontSize: 16, fontWeight: '700', color: colors.text },
   status: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
   notes: { fontSize: 12, color: colors.textMuted, marginVertical: space.sm, lineHeight: 18 },
@@ -190,5 +291,39 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: 8,
   },
   btnSecondaryText: { color: colors.text, fontWeight: '600' },
+  btnSecondaryDisabled: { opacity: 0.4 },
+  btnSecondaryTextDisabled: { opacity: 0.4 },
+  btnConnected: { backgroundColor: colors.success, opacity: 0.7 },
+  btnConnectedText: { color: colors.onPrimary },
+  connectedInfo: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: 8,
+    padding: space.sm,
+    marginVertical: space.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+  },
+  connectedLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.primary,
+    marginBottom: 4,
+  },
+  connectedValue: {
+    fontSize: 13,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  syncBtn: {
+    backgroundColor: colors.success,
+    paddingVertical: space.md,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: space.lg,
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  syncBtnDisabled: { opacity: 0.6 },
+  syncBtnText: { color: colors.onPrimary, fontWeight: '700', fontSize: 16 },
   footer: { fontSize: 12, color: colors.textMuted, lineHeight: 18, marginTop: space.md },
 });
