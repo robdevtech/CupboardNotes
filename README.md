@@ -1,6 +1,6 @@
 # Cupboard Notes
 
-Offline-first mobile recipe app built with **Expo + TypeScript**. Your recipes live in on-device SQLite; optional sync uses **your** cloud (Google Drive, iCloud, Dropbox, OneDrive, or Box). No managed server. Free, client-side only.
+Offline-first mobile recipe app built with **Expo + TypeScript**. Your recipes live in on-device SQLite; optional sync uses **your** cloud (Dropbox currently supported; Google Drive, iCloud, OneDrive, and Box planned). No managed server. Free, client-side only.
 
 > **Mealie note:** Cupboard Notes borrows *concepts* only (schema.org JSON-LD import, serving scale pipeline). **No Mealie/AGPL code was copied.** Parsers and types are original TypeScript preferring [schema.org/Recipe](https://schema.org/Recipe).
 
@@ -57,13 +57,10 @@ Then open in Expo Go (phone/tablet), iOS Simulator, Android emulator, or `w` for
 - [x] Photos: import URLs cached locally; camera + gallery via `expo-image-picker`; gallery on detail/edit
 - [x] Share recipe as JSON via OS share sheet (`expo-sharing` + Share fallback)
 - [x] Tablet split layout (ingredients | instructions)
-- [x] Pluggable **top-5** cloud adapters behind `CloudStorageAdapter`:
-  1. Google Drive (stub furthest — session + syncRecipeBundle path)
-  2. iCloud Drive (iOS-only; Android gracefully unavailable)
-  3. Dropbox
-  4. OneDrive (Microsoft Graph)
-  5. Box (replaces discontinued Amazon Drive consumer API)
-- [x] Settings UI: multi-select enable/disable providers; connect/disconnect stubs
+- [x] Pluggable cloud adapter architecture behind `CloudStorageAdapter`
+- [x] Dropbox cloud storage integration (currently the only active provider in Settings UI)
+- [x] Additional provider adapters implemented but not exposed (Google Drive, iCloud, OneDrive, Box) — ready for future activation
+- [x] Settings UI: enable/disable providers; connect/disconnect
 - [x] Full light/dark kitchen themes with System/Light/Dark preference persisted in SecureStore
 - [x] `expo-secure-store` wrapper for future OAuth tokens
 - [x] README with architecture, Mealie/AGPL note, run instructions
@@ -82,7 +79,7 @@ Then open in Expo Go (phone/tablet), iOS Simulator, Android emulator, or `w` for
 
 ### Stubbed / next milestones
 
-- [ ] Live OAuth (PKCE) for Dropbox, Google Drive, OneDrive, Box via `expo-auth-session`
+- [ ] Activate additional providers: Google Drive, OneDrive, Box OAuth (PKCE) via `expo-auth-session`
 - [ ] Real iCloud ubiquity container / CloudKit in a custom dev client
 - [ ] Persist scale-mode overrides more richly; unit convert UI
 - [ ] Stronger HTML heuristics when JSON-LD missing
@@ -106,13 +103,117 @@ Then open in Expo Go (phone/tablet), iOS Simulator, Android emulator, or `w` for
 | Provider | Status | Notes |
 |----------|--------|-------|
 | **Local Folder** | ✅ Working | App Documents directory; always available |
-| **Dropbox** | ⚠️ OAuth stub | Planned: OAuth 2.0 PKCE, `files.content.read/write` |
+| **Dropbox** | ✅ Working | OAuth 2.0 PKCE, `files.content.read/write` |
 | Google Drive | Stub only | Planned: OAuth 2.0 PKCE, `drive.file` scope |
 | iCloud | Stub only | Planned: iOS ubiquity container / CloudKit |
 | OneDrive | Stub only | Planned: Azure AD v2 / Graph, `Files.ReadWrite` |
 | Box | Stub only | Planned: OAuth 2.0, `root_readwrite` |
 
 Tokens: `expo-secure-store` only. Never a central Cupboard Notes server.
+
+## Releases / Friend Testing
+
+Cupboard Notes uses **EAS Build** to create production Android APK files for sideloading and friend testing. APK binaries are **never committed** to git; they are built via EAS and attached to [GitHub Releases](https://github.com/robdevtech/CupboardNotes/releases) on this repo.
+
+### Prerequisites (one-time setup)
+
+1. **Install EAS CLI** (if not already installed):
+   ```bash
+   npm install -g eas-cli
+   ```
+
+2. **Authenticate with Expo**:
+   ```bash
+   eas login
+   ```
+   Use your Expo account credentials. The project owner must do this first.
+
+3. **Link the EAS project** (first time only):
+   ```bash
+   eas init
+   ```
+   This will:
+   - Create or link to an Expo project
+   - Update `app.json` with `extra.eas.projectId`
+   - Replace the `PLACEHOLDER_REPLACE_AFTER_EAS_INIT` value in `app.json`
+
+4. **Set up environment variables** for EAS (required for Dropbox integration):
+   ```bash
+   eas secret:create --scope project --name EXPO_PUBLIC_DROPBOX_APP_KEY --value YOUR_DROPBOX_APP_KEY
+   ```
+   This ensures the Dropbox Connect button works in APK builds. Do NOT commit secrets to git.
+
+### Building an Android APK for testing
+
+The `eas.json` configuration includes three profiles:
+
+- **`preview`**: Production-ready APK for sideload/friend testing (recommended for releases)
+- **`development`**: Development build with DevTools (requires `expo-dev-client`)
+- **`production`**: AAB format for Play Store submission
+
+To build an APK for friend testing:
+
+```bash
+# Using npm script (recommended)
+npm run eas:build:android:apk
+
+# Or directly with EAS CLI
+eas build --platform android --profile preview
+```
+
+The build runs in the cloud. When complete:
+- Download the `.apk` file from the EAS dashboard or the URL provided in the terminal
+- Test it locally on your device or emulator
+
+### Publishing to GitHub Releases
+
+1. **Create a new git tag** for the release:
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+2. **Build the APK** (if not already built):
+   ```bash
+   npm run eas:build:android:apk
+   ```
+
+3. **Create a GitHub Release**:
+   - Go to [Releases](https://github.com/robdevtech/CupboardNotes/releases)
+   - Click "Draft a new release"
+   - Select the tag (e.g., `v1.0.0`)
+   - Add release notes
+   - **Attach the APK** downloaded from EAS Build
+   - Click "Publish release"
+
+4. **Share the Release URL** with friends for testing:
+   ```
+   https://github.com/robdevtech/CupboardNotes/releases/latest
+   ```
+
+### Optional: Automated GitHub Release workflow
+
+A GitHub Actions workflow can automate APK attachment to releases when a tag is pushed. See `.github/workflows/eas-release.yml` for the implementation (if added). This requires:
+- `EXPO_TOKEN` as a GitHub Actions secret (get it from `eas whoami --tokens`)
+- Tag-based trigger (e.g., `v*`)
+
+The workflow downloads the EAS build artifact and attaches it to the GitHub Release automatically.
+
+### Important notes
+
+- **APK binaries are never committed to git** — they are build artifacts only
+- **EAS account required**: The project owner must run `eas login` and `eas init` once
+- **Dropbox integration**: Set `EXPO_PUBLIC_DROPBOX_APP_KEY` as an EAS secret for cloud sync to work in builds
+- **Free EAS tier**: Includes limited builds per month; check [Expo pricing](https://expo.dev/pricing) for details
+- **F-Droid future**: APKs from this process can be used for a custom F-Droid repo (not yet implemented)
+
+### Build profiles reference
+
+| Profile | Command | Output | Use case |
+|---------|---------|--------|----------|
+| `preview` | `npm run eas:build:android:apk` | `.apk` | Friend testing, sideload, GitHub Releases |
+| `development` | `npm run eas:build:android:dev` | `.apk` (dev) | Internal development with DevTools |
+| `production` | `npm run eas:build:android:aab` | `.aab` | Google Play Store submission |
 
 ## License / attribution
 
