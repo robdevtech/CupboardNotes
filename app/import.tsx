@@ -10,7 +10,7 @@ import {
   ScrollView,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Link } from 'expo-router';
 import * as Linking from 'expo-linking';
 import Constants from 'expo-constants';
 import { importRecipeFromUrl } from '../src/parse/htmlFetch';
@@ -146,6 +146,20 @@ export default function ImportScreen() {
         Fetches HTTPS HTML on-device and extracts schema.org Recipe JSON-LD (including images).
         No backend. If the page has no Recipe JSON-LD, paste manually.
       </Text>
+      
+      <Link href="/import-ai" asChild>
+        <Pressable style={styles.aiBtn}>
+          <Text style={styles.aiBtnText}>✨ Import with AI</Text>
+          <Text style={styles.aiBtnSub}>Use ChatGPT, Claude, or any AI to convert recipes</Text>
+        </Pressable>
+      </Link>
+
+      <View style={styles.divider}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>OR</Text>
+        <View style={styles.dividerLine} />
+      </View>
+
       <Text style={styles.label}>Recipe URL (HTTPS)</Text>
       <TextInput
         style={styles.input}
@@ -203,6 +217,40 @@ export default function ImportScreen() {
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   scroll: { padding: space.md, paddingBottom: 48, backgroundColor: colors.bg },
   help: { color: colors.textMuted, marginBottom: space.md, lineHeight: 20 },
+  aiBtn: {
+    backgroundColor: colors.primary,
+    padding: space.md,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: space.md,
+  },
+  aiBtnText: {
+    color: colors.onPrimary,
+    fontWeight: '700',
+    fontSize: 16,
+    marginBottom: 4,
+  },
+  aiBtnSub: {
+    color: colors.onPrimary,
+    fontSize: 12,
+    opacity: 0.9,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: space.md,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    color: colors.textMuted,
+    marginHorizontal: space.sm,
+    fontSize: 12,
+    fontWeight: '600',
+  },
   label: { fontWeight: '600', marginBottom: 6, color: colors.text },
   input: {
     borderWidth: 1,

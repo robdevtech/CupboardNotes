@@ -55,6 +55,11 @@ export default function RecipeListScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.toolbar}>
+        <Link href="/import-ai" asChild>
+          <Pressable style={styles.toolBtn}>
+            <Text style={styles.toolBtnText}>Import with AI</Text>
+          </Pressable>
+        </Link>
         <Link href="/import" asChild>
           <Pressable style={styles.toolBtn}>
             <Text style={styles.toolBtnText}>Import URL</Text>

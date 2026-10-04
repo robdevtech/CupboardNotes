@@ -39,6 +39,7 @@ function RootNavigator() {
         <Stack.Screen name="recipe/[id]" options={{ title: 'Recipe' }} />
         <Stack.Screen name="recipe/edit" options={{ title: 'Edit recipe', presentation: 'modal' }} />
         <Stack.Screen name="import" options={{ title: 'Import from URL', presentation: 'modal' }} />
+        <Stack.Screen name="import-ai" options={{ title: 'Import with AI', presentation: 'modal' }} />
         <Stack.Screen name="settings" options={{ title: 'Cloud & settings' }} />
       </Stack>
     </>
