@@ -19,6 +19,18 @@ CREATE TABLE IF NOT EXISTS recipes (
 );
 CREATE INDEX IF NOT EXISTS idx_recipes_updated ON recipes(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_recipes_title ON recipes(title);
+
+CREATE TABLE IF NOT EXISTS recipe_links (
+  id TEXT PRIMARY KEY NOT NULL,
+  from_recipe_id TEXT NOT NULL,
+  to_recipe_id TEXT NOT NULL,
+  label TEXT,
+  page TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE (from_recipe_id, to_recipe_id)
+);
+CREATE INDEX IF NOT EXISTS idx_recipe_links_from ON recipe_links(from_recipe_id);
+CREATE INDEX IF NOT EXISTS idx_recipe_links_to ON recipe_links(to_recipe_id);
 `;
 
 /** Migrate older milestone schemas that lack notes/photos columns. */

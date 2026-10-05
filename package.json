@@ -5,6 +5,7 @@
   "dependencies": {
     "expo": "~57.0.26",
     "expo-auth-session": "~57.0.13",
+    "expo-clipboard": "~57.0.2",
     "expo-constants": "~57.0.20",
     "expo-crypto": "~57.0.3",
     "expo-file-system": "~57.0.7",
@@ -28,8 +29,12 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@testing-library/react-native": "^12.9.0",
+    "@types/jest": "^29.5.14",
     "@types/react": "~19.2.2",
     "babel-preset-expo": "^57.0.12",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -37,6 +42,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "test": "jest",
+    "test:watch": "jest --watch",
     "eas:build:android:apk": "eas build --platform android --profile preview",
     "eas:build:android:dev": "eas build --platform android --profile development",
     "eas:build:android:aab": "eas build --platform android --profile production"

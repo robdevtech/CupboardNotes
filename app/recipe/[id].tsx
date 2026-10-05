@@ -11,7 +11,7 @@ import {
 import { useLocalSearchParams, useRouter, useFocusEffect, Stack } from 'expo-router';
 import * as repo from '../../src/storage/recipeRepo';
 import { shareRecipeAsJson } from '../../src/storage/exportShare';
-import type { Recipe } from '../../src/domain/types';
+import type { Recipe, RecipeLinkGraph, RecipeLinkRef } from '../../src/domain/types';
 import { scaleIngredients, scaleRatio } from '../../src/scale/servings';
 import { formatIngredient } from '../../src/parse/ingredientParse';
 import { ScaleServings } from '../../src/ui/ScaleServings';
@@ -20,6 +20,7 @@ import { useBreakpoint } from '../../src/hooks/useBreakpoint';
 import { useRecipeStore } from '../../src/store/recipeStore';
 import { useCookingStore } from '../../src/store/cookingStore';
 import { useTheme, space, type ThemeColors } from '../../src/ui/theme';
+import { findLinkedRecipeForText, formatRecipeLinkCaption } from '../../src/storage/recipeLinks';
 
 const EMPTY_SET = new Set<string>();
 
@@ -36,6 +37,7 @@ export default function RecipeDetailScreen() {
     useCallback((s) => (id ? s.checkedSteps[id] : undefined) || EMPTY_SET, [id])
   );
   const [recipe, setRecipe] = useState<Recipe | null>(null);
+  const [links, setLinks] = useState<RecipeLinkGraph>({ uses: [], usedIn: [] });
   const [targetServings, setTargetServings] = useState(4);
   const [loading, setLoading] = useState(true);
 
@@ -45,8 +47,10 @@ export default function RecipeDetailScreen() {
       (async () => {
         setLoading(true);
         const r = id ? await repo.getRecipe(id) : null;
+        const graph = id ? await repo.getLinkedRecipes(id) : { uses: [], usedIn: [] };
         if (!alive) return;
         setRecipe(r);
+        setLinks(graph);
         if (r) setTargetServings(r.servings);
         setLoading(false);
       })();
@@ -108,14 +112,35 @@ export default function RecipeDetailScreen() {
         targetServings={targetServings}
         onChange={setTargetServings}
       />
-      {scaledIngredients.map((ing) => (
-        <View key={ing.id} style={styles.ingRow}>
-          <Text style={styles.ingText}>{formatIngredient(ing)}</Text>
-          {ing.scaleMode === 'fixed' ? (
-            <Text style={styles.fixedBadge}>fixed</Text>
-          ) : null}
-        </View>
-      ))}
+      {scaledIngredients.map((ing) => {
+        const linked = findLinkedRecipeForText(ing.raw, links.uses);
+        const row = (
+          <>
+            <Text style={StyleSheet.flatten([styles.ingText, linked && styles.ingLinkText])}>
+              {formatIngredient(ing)}
+            </Text>
+            {ing.scaleMode === 'fixed' ? (
+              <Text style={styles.fixedBadge}>fixed</Text>
+            ) : null}
+          </>
+        );
+        if (!linked) {
+          return (
+            <View key={ing.id} style={styles.ingRow}>
+              {row}
+            </View>
+          );
+        }
+        return (
+          <Pressable
+            key={ing.id}
+            style={styles.ingRow}
+            onPress={() => router.push(`/recipe/${linked.recipeId}`)}
+          >
+            {row}
+          </Pressable>
+        );
+      })}
     </View>
   );
 
@@ -203,6 +228,28 @@ export default function RecipeDetailScreen() {
           </View>
         ) : null}
 
+        {links.uses.length > 0 || links.usedIn.length > 0 ? (
+          <View style={styles.panel}>
+            {links.uses.length > 0 ? (
+              <LinkList
+                heading="Uses"
+                items={links.uses}
+                styles={styles}
+                onOpen={(recipeId) => router.push(`/recipe/${recipeId}`)}
+              />
+            ) : null}
+            {links.usedIn.length > 0 ? (
+              <LinkList
+                heading="Used in"
+                items={links.usedIn}
+                stacked={links.uses.length > 0}
+                styles={styles}
+                onOpen={(recipeId) => router.push(`/recipe/${recipeId}`)}
+              />
+            ) : null}
+          </View>
+        ) : null}
+
         {recipe.notes ? (
           <View style={styles.panel}>
             <Text style={styles.heading}>Notes</Text>
@@ -227,6 +274,31 @@ export default function RecipeDetailScreen() {
         ) : null}
       </ScrollView>
     </>
+  );
+}
+
+function LinkList({
+  heading,
+  items,
+  stacked,
+  styles,
+  onOpen,
+}: {
+  heading: string;
+  items: RecipeLinkRef[];
+  stacked?: boolean;
+  styles: ReturnType<typeof createStyles>;
+  onOpen: (recipeId: string) => void;
+}) {
+  return (
+    <View style={stacked ? { marginTop: space.sm } : undefined}>
+      <Text style={styles.heading}>{heading}</Text>
+      {items.map((item) => (
+        <Pressable key={item.linkId} style={styles.linkRow} onPress={() => onOpen(item.recipeId)}>
+          <Text style={styles.linkText}>{formatRecipeLinkCaption(item)}</Text>
+        </Pressable>
+      ))}
+    </View>
   );
 }
 
@@ -266,6 +338,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderBottomColor: colors.border,
   },
   ingText: { flex: 1, color: colors.text, fontSize: 15 },
+  ingLinkText: { color: colors.primary, fontWeight: '600' },
   fixedBadge: {
     fontSize: 10,
     color: colors.primary,
@@ -322,4 +395,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderColor: colors.primary,
   },
   tagChipText: { fontSize: 13, color: colors.primary, fontWeight: '600' },
+  linkRow: {
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  linkText: { fontSize: 15, color: colors.primary, fontWeight: '600' },
 });

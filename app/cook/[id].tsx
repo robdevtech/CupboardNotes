@@ -15,13 +15,17 @@ import type { Recipe } from '../../src/domain/types';
 import { useCookingStore } from '../../src/store/cookingStore';
 import { useTheme, space, type ThemeColors } from '../../src/ui/theme';
 
+const EMPTY_SET = new Set<string>();
+
 export default function CookingModeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const toggleStep = useCookingStore((s) => s.toggleStep);
-  const checkedSteps = useCookingStore((s) => s.checkedSteps[id || ''] || new Set());
+  const checkedSteps = useCookingStore(
+    useCallback((s) => (id ? s.checkedSteps[id] : undefined) || EMPTY_SET, [id])
+  );
   
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [loading, setLoading] = useState(true);

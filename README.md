@@ -27,10 +27,11 @@ Then open in Expo Go (phone/tablet), iOS Simulator, Android emulator, or `w` for
     recipe/[id].tsx         # Detail (phone stack / tablet split)
     recipe/edit.tsx         # Create & edit (all fields + photos)
     import.tsx              # HTTPS URL → JSON-LD import + paste fallback
+    import-ai.tsx           # AI import: copy prompt → AI → paste JSON → save
     settings.tsx            # Top-5 cloud provider picker
   src/
     domain/                 # Recipe, Ingredient, Photo, ScaleRules types
-    parse/                  # htmlFetch, jsonLd, heuristics, ingredientParse
+    parse/                  # htmlFetch, jsonLd, aiRecipeParser, heuristics, ingredientParse
     scale/                  # servings (linear + fixed), units (same-dimension)
     storage/                # SQLite repo, photo cache, share/export, SecureStore stub
     cloud/                  # CloudStorageAdapter + providers/ (5 stubs)
@@ -53,6 +54,7 @@ Then open in Expo Go (phone/tablet), iOS Simulator, Android emulator, or `w` for
 - [x] Serving scale UI: linear `qty × ratio`; **fixed** / unparsed lines unchanged (pinch, to taste, etc.)
 - [x] Unit tables (metric/US) with same-dimension convert helpers
 - [x] Import from HTTPS URL → JSON-LD `Recipe` (ingredients, instructions, yield, **image** URLs) → editor/save
+- [x] **Import with AI**: Copy prompt → paste into ChatGPT/Claude/Gemini/local AI → paste JSON response → lenient parser (handles markdown fences, trailing commas, smart quotes) → preview/edit → save
 - [x] Import failure path: paste / manual entry
 - [x] Photos: import URLs cached locally; camera + gallery via `expo-image-picker`; gallery on detail/edit
 - [x] Share recipe as JSON via OS share sheet (`expo-sharing` + Share fallback)
@@ -64,6 +66,7 @@ Then open in Expo Go (phone/tablet), iOS Simulator, Android emulator, or `w` for
 - [x] Full light/dark kitchen themes with System/Light/Dark preference persisted in SecureStore
 - [x] `expo-secure-store` wrapper for future OAuth tokens
 - [x] README with architecture, Mealie/AGPL note, run instructions
+- [x] Jest test setup with comprehensive AI parser tests
 
 ### Completed features (Wishlist integration)
 
@@ -83,7 +86,7 @@ Then open in Expo Go (phone/tablet), iOS Simulator, Android emulator, or `w` for
 - [ ] Real iCloud ubiquity container / CloudKit in a custom dev client
 - [ ] Persist scale-mode overrides more richly; unit convert UI
 - [ ] Stronger HTML heuristics when JSON-LD missing
-- [ ] Automated tests for parsers & scale
+- [ ] Automated tests for parsers & scale (partially done: AI parser has comprehensive tests)
 
 ### Storage sync strategy
 

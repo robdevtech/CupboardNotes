@@ -1,4 +1,14 @@
-import type { Ingredient, Recipe, RecipeDraft, RecipePhoto, RecipeStep } from '../domain/types';
+import type {
+  Ingredient,
+  Recipe,
+  RecipeDraft,
+  RecipeLink,
+  RecipeLinkDraft,
+  RecipeLinkGraph,
+  RecipeLinkRef,
+  RecipePhoto,
+  RecipeStep,
+} from '../domain/types';
 import { newId } from '../domain/ids';
 import { getDb } from './db';
 
@@ -129,5 +139,125 @@ export async function updateRecipe(id: string, draft: RecipeDraft): Promise<Reci
 
 export async function deleteRecipe(id: string): Promise<void> {
   const db = await getDb();
-  await db.runAsync('DELETE FROM recipes WHERE id = ?', [id]);
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      'DELETE FROM recipe_links WHERE from_recipe_id = ? OR to_recipe_id = ?',
+      [id, id]
+    );
+    await db.runAsync('DELETE FROM recipes WHERE id = ?', [id]);
+  });
+}
+
+interface RecipeLinkRow {
+  id: string;
+  from_recipe_id: string;
+  to_recipe_id: string;
+  label: string | null;
+  page: string | null;
+  created_at: string;
+}
+
+interface RecipeLinkJoinRow extends RecipeLinkRow {
+  title: string;
+}
+
+function rowToLink(row: RecipeLinkRow): RecipeLink {
+  return {
+    id: row.id,
+    fromRecipeId: row.from_recipe_id,
+    toRecipeId: row.to_recipe_id,
+    label: row.label,
+    page: row.page,
+    createdAt: row.created_at,
+  };
+}
+
+function joinRowToRef(row: RecipeLinkJoinRow, direction: 'uses' | 'usedIn'): RecipeLinkRef {
+  return {
+    linkId: row.id,
+    recipeId: direction === 'uses' ? row.to_recipe_id : row.from_recipe_id,
+    title: row.title,
+    label: row.label,
+    page: row.page,
+  };
+}
+
+export async function createRecipeLink(draft: RecipeLinkDraft): Promise<RecipeLink> {
+  if (draft.fromRecipeId === draft.toRecipeId) {
+    throw new Error('A recipe cannot link to itself');
+  }
+  const from = await getRecipe(draft.fromRecipeId);
+  const to = await getRecipe(draft.toRecipeId);
+  if (!from || !to) {
+    throw new Error('Recipe not found');
+  }
+
+  const db = await getDb();
+  const existing = await db.getFirstAsync<RecipeLinkRow>(
+    'SELECT * FROM recipe_links WHERE from_recipe_id = ? AND to_recipe_id = ?',
+    [draft.fromRecipeId, draft.toRecipeId]
+  );
+  if (existing) return rowToLink(existing);
+
+  const link: RecipeLink = {
+    id: newId(),
+    fromRecipeId: draft.fromRecipeId,
+    toRecipeId: draft.toRecipeId,
+    label: draft.label?.trim() || null,
+    page: draft.page?.trim() || null,
+    createdAt: new Date().toISOString(),
+  };
+  await db.runAsync(
+    `INSERT INTO recipe_links (id, from_recipe_id, to_recipe_id, label, page, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [link.id, link.fromRecipeId, link.toRecipeId, link.label, link.page, link.createdAt]
+  );
+  return link;
+}
+
+export async function deleteRecipeLink(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM recipe_links WHERE id = ?', [id]);
+}
+
+export async function listRecipeLinksFrom(fromRecipeId: string): Promise<RecipeLink[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<RecipeLinkRow>(
+    'SELECT * FROM recipe_links WHERE from_recipe_id = ? ORDER BY created_at ASC',
+    [fromRecipeId]
+  );
+  return rows.map(rowToLink);
+}
+
+export async function listRecipeLinksTo(toRecipeId: string): Promise<RecipeLink[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<RecipeLinkRow>(
+    'SELECT * FROM recipe_links WHERE to_recipe_id = ? ORDER BY created_at ASC',
+    [toRecipeId]
+  );
+  return rows.map(rowToLink);
+}
+
+export async function getLinkedRecipes(recipeId: string): Promise<RecipeLinkGraph> {
+  const db = await getDb();
+  const usesRows = await db.getAllAsync<RecipeLinkJoinRow>(
+    `SELECT l.id, l.from_recipe_id, l.to_recipe_id, l.label, l.page, l.created_at, r.title
+     FROM recipe_links l
+     JOIN recipes r ON r.id = l.to_recipe_id
+     WHERE l.from_recipe_id = ?
+     ORDER BY r.title COLLATE NOCASE`,
+    [recipeId]
+  );
+  const usedInRows = await db.getAllAsync<RecipeLinkJoinRow>(
+    `SELECT l.id, l.from_recipe_id, l.to_recipe_id, l.label, l.page, l.created_at, r.title
+     FROM recipe_links l
+     JOIN recipes r ON r.id = l.from_recipe_id
+     WHERE l.to_recipe_id = ?
+     ORDER BY r.title COLLATE NOCASE`,
+    [recipeId]
+  );
+  return {
+    uses: usesRows.map((row) => joinRowToRef(row, 'uses')),
+    usedIn: usedInRows.map((row) => joinRowToRef(row, 'usedIn')),
+  };
 }
