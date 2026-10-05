@@ -74,3 +74,34 @@ export interface RecipeExport {
   exportedAt: string;
   recipe: Recipe;
 }
+
+/** Directed link from one recipe to another (e.g. tartlets → biscuit pastry). */
+export interface RecipeLink {
+  id: string;
+  fromRecipeId: string;
+  toRecipeId: string;
+  label: string | null;
+  page: string | null;
+  createdAt: string;
+}
+
+export interface RecipeLinkDraft {
+  fromRecipeId: string;
+  toRecipeId: string;
+  label?: string | null;
+  page?: string | null;
+}
+
+/** A linked recipe with title resolved for "Uses" / "Used in" lists. */
+export interface RecipeLinkRef {
+  linkId: string;
+  recipeId: string;
+  title: string;
+  label: string | null;
+  page: string | null;
+}
+
+export interface RecipeLinkGraph {
+  uses: RecipeLinkRef[];
+  usedIn: RecipeLinkRef[];
+}

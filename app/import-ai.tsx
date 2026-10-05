@@ -18,6 +18,7 @@ import { parseAiRecipeResponse, type JsonLdRecipe } from '../src/parse/aiRecipeP
 import { parseIngredientLine } from '../src/parse/ingredientParse';
 import { newId } from '../src/domain/ids';
 import * as repo from '../src/storage/recipeRepo';
+import { resolveBatchAutoLinks } from '../src/storage/recipeLinks';
 import { useRecipeStore } from '../src/store/recipeStore';
 import { useTheme, space, type ThemeColors } from '../src/ui/theme';
 
@@ -197,23 +198,19 @@ export default function ImportAiScreen() {
         nameToId[recipe.title.toLowerCase()] = created.id;
       }
       
-      // Second pass: create auto-links for referenced recipes in same batch
-      for (const recipe of selected) {
-        const recipeId = nameToId[recipe.title.toLowerCase()];
-        for (const ref of recipe.referencedRecipes) {
-          const linkedId = nameToId[ref.name.toLowerCase()];
-          if (linkedId && linkedId !== recipeId) {
-            // TODO: Store link once we have recipe_links table
-            // For now, referenced recipes are just noted in the notes field
-            console.log(`Would link ${recipe.title} -> ${ref.name} (${linkedId})`);
-          }
-        }
+      const autoLinks = resolveBatchAutoLinks(selected, nameToId);
+      for (const link of autoLinks) {
+        await repo.createRecipeLink(link);
       }
-      
+
       await refresh();
+      const linkNote =
+        autoLinks.length > 0
+          ? ` ${autoLinks.length} recipe link${autoLinks.length > 1 ? 's' : ''} created.`
+          : '';
       Alert.alert(
         'Import complete',
-        `Imported ${selected.length} recipe${selected.length > 1 ? 's' : ''} successfully.`,
+        `Imported ${selected.length} recipe${selected.length > 1 ? 's' : ''} successfully.${linkNote}`,
         [{ text: 'OK', onPress: () => router.back() }]
       );
     } catch (e) {

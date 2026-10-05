@@ -11,10 +11,11 @@ import {
   Switch,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import type { Ingredient, RecipeDraft, RecipePhoto, RecipeStep } from '../../src/domain/types';
+import type { Ingredient, RecipeDraft, RecipeLinkRef, RecipePhoto, RecipeStep } from '../../src/domain/types';
 import { newId } from '../../src/domain/ids';
 import { parseIngredientLine } from '../../src/parse/ingredientParse';
 import * as repo from '../../src/storage/recipeRepo';
+import { formatRecipeLinkCaption } from '../../src/storage/recipeLinks';
 import { captureFromCamera, pickFromGallery } from '../../src/storage/photos';
 import { PhotoGallery } from '../../src/ui/PhotoGallery';
 import { useRecipeStore } from '../../src/store/recipeStore';
@@ -32,6 +33,8 @@ export default function RecipeEditScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const router = useRouter();
   const refresh = useRecipeStore((s) => s.refresh);
+  const recipes = useRecipeStore((s) => s.recipes);
+  const loadRecipes = useRecipeStore((s) => s.loadRecipes);
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -48,6 +51,11 @@ export default function RecipeEditScreen() {
   const [fixedIds, setFixedIds] = useState<Record<string, boolean>>({});
   const [tags, setTags] = useState<string[]>([]);
   const [customTagInput, setCustomTagInput] = useState('');
+  const [usesLinks, setUsesLinks] = useState<RecipeLinkRef[]>([]);
+  const [linkSearch, setLinkSearch] = useState('');
+  const [linkLabel, setLinkLabel] = useState('');
+  const [linkPage, setLinkPage] = useState('');
+  const [pickedLinkId, setPickedLinkId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -78,9 +86,15 @@ export default function RecipeEditScreen() {
         if (i.scaleMode === 'fixed') flags[i.raw] = true;
       });
       setFixedIds(flags);
+      const graph = await repo.getLinkedRecipes(id);
+      setUsesLinks(graph.uses);
       setLoading(false);
     })();
   }, [id, router]);
+
+  useEffect(() => {
+    void loadRecipes();
+  }, [loadRecipes]);
 
   const buildIngredients = (): Ingredient[] => {
     return ingredientsText
@@ -182,6 +196,42 @@ export default function RecipeEditScreen() {
 
   const removeTag = (tag: string) => {
     setTags(tags.filter((t) => t !== tag));
+  };
+
+  const linkedIds = new Set(usesLinks.map((l) => l.recipeId));
+  const linkQuery = linkSearch.toLowerCase().trim();
+  const linkCandidates = recipes
+    .filter((r) => r.id !== id && !linkedIds.has(r.id))
+    .filter((r) => !linkQuery || r.title.toLowerCase().includes(linkQuery))
+    .slice(0, 8);
+
+  const onAddLink = async () => {
+    if (!id || !pickedLinkId) return;
+    try {
+      await repo.createRecipeLink({
+        fromRecipeId: id,
+        toRecipeId: pickedLinkId,
+        label: linkLabel.trim() || null,
+        page: linkPage.trim() || null,
+      });
+      const graph = await repo.getLinkedRecipes(id);
+      setUsesLinks(graph.uses);
+      setPickedLinkId(null);
+      setLinkSearch('');
+      setLinkLabel('');
+      setLinkPage('');
+    } catch (e) {
+      Alert.alert('Could not add link', e instanceof Error ? e.message : 'Unknown error');
+    }
+  };
+
+  const onRemoveLink = async (linkId: string) => {
+    try {
+      await repo.deleteRecipeLink(linkId);
+      setUsesLinks((prev) => prev.filter((l) => l.linkId !== linkId));
+    } catch (e) {
+      Alert.alert('Could not remove link', e instanceof Error ? e.message : 'Unknown error');
+    }
   };
 
   return (
@@ -304,6 +354,78 @@ export default function RecipeEditScreen() {
         </View>
       </View>
 
+      {id ? (
+        <View style={styles.field}>
+          <Text style={styles.label}>Uses (linked recipes)</Text>
+          {usesLinks.length === 0 ? (
+            <Text style={styles.linkHint}>No linked recipes yet</Text>
+          ) : (
+            usesLinks.map((link) => (
+              <View key={link.linkId} style={styles.linkRow}>
+                <Text style={styles.linkTitle} numberOfLines={1}>
+                  {formatRecipeLinkCaption(link)}
+                </Text>
+                <Pressable onPress={() => void onRemoveLink(link.linkId)} style={styles.linkRemove}>
+                  <Text style={styles.linkRemoveText}>Remove</Text>
+                </Pressable>
+              </View>
+            ))
+          )}
+          <TextInput
+            style={StyleSheet.flatten([styles.input, { marginTop: space.sm }])}
+            value={linkSearch}
+            onChangeText={setLinkSearch}
+            placeholder="Search recipes to link"
+            placeholderTextColor={colors.textMuted}
+          />
+          {linkCandidates.map((r) => (
+            <Pressable
+              key={r.id}
+              style={StyleSheet.flatten([
+                styles.linkCandidate,
+                pickedLinkId === r.id && styles.linkCandidateSelected,
+              ])}
+              onPress={() => setPickedLinkId(r.id)}
+            >
+              <Text
+                style={StyleSheet.flatten([
+                  styles.linkCandidateText,
+                  pickedLinkId === r.id && styles.linkCandidateTextSelected,
+                ])}
+              >
+                {r.title}
+              </Text>
+            </Pressable>
+          ))}
+          {recipes.filter((r) => r.id !== id && !linkedIds.has(r.id)).length === 0 ? (
+            <Text style={styles.linkHint}>No other recipes to link yet</Text>
+          ) : null}
+          <View style={styles.linkMetaRow}>
+            <TextInput
+              style={StyleSheet.flatten([styles.input, styles.linkMetaInput])}
+              value={linkLabel}
+              onChangeText={setLinkLabel}
+              placeholder="Label (optional)"
+              placeholderTextColor={colors.textMuted}
+            />
+            <TextInput
+              style={StyleSheet.flatten([styles.input, styles.linkMetaInput])}
+              value={linkPage}
+              onChangeText={setLinkPage}
+              placeholder="Page (optional)"
+              placeholderTextColor={colors.textMuted}
+            />
+          </View>
+          <Pressable
+            style={StyleSheet.flatten([styles.linkAddBtn, !pickedLinkId && styles.linkAddBtnDisabled])}
+            onPress={() => void onAddLink()}
+            disabled={!pickedLinkId}
+          >
+            <Text style={styles.linkAddBtnText}>Add link</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <PhotoGallery
         photos={photos}
         editable
@@ -419,4 +541,42 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'center',
   },
   customTagBtnText: { fontSize: 20, color: colors.onPrimary, fontWeight: '700' },
+  linkHint: { color: colors.textMuted, fontSize: 13, marginBottom: space.sm },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: space.sm,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  linkTitle: { flex: 1, color: colors.text, fontSize: 15, fontWeight: '600' },
+  linkRemove: { paddingHorizontal: space.sm, paddingVertical: 4 },
+  linkRemoveText: { color: colors.danger, fontWeight: '600', fontSize: 13 },
+  linkCandidate: {
+    paddingVertical: 8,
+    paddingHorizontal: space.sm,
+    borderRadius: 8,
+    marginTop: 4,
+    backgroundColor: colors.chip,
+  },
+  linkCandidateSelected: {
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  linkCandidateText: { color: colors.text, fontSize: 14 },
+  linkCandidateTextSelected: { color: colors.primary, fontWeight: '600' },
+  linkMetaRow: { flexDirection: 'row', gap: space.sm, marginTop: space.sm },
+  linkMetaInput: { flex: 1 },
+  linkAddBtn: {
+    marginTop: space.sm,
+    backgroundColor: colors.primary,
+    paddingVertical: space.sm,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  linkAddBtnDisabled: { opacity: 0.5 },
+  linkAddBtnText: { color: colors.onPrimary, fontWeight: '700' },
 });
